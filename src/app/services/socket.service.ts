@@ -14,6 +14,7 @@ export class SocketService {
   isConnected = signal<boolean>(false);
   messages = signal<Message[]>([]);
   onlineUsers = signal<string[]>([]);
+  typingUsers = signal<Map<string, boolean>>(new Map());
 
   connect(): void {
     const token = this.authService.getToken();
@@ -50,8 +51,15 @@ export class SocketService {
     });
 
     this.socket.on('typing:user', (data: { userId: string; isTyping: boolean }) => {
-      // Handle typing indicator
-      console.log('Typing:', data);
+      this.typingUsers.update(map => {
+        const newMap = new Map(map);
+        if (data.isTyping) {
+          newMap.set(data.userId, true);
+        } else {
+          newMap.delete(data.userId);
+        }
+        return newMap;
+      });
     });
 
     this.socket.on('message:status', (data: { messageId: string; status: string }) => {

@@ -1,10 +1,12 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed, effect } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed, effect, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
 import { ChatService } from '../../services/chat.service';
 import { SocketService } from '../../services/socket.service';
 import { UserService } from '../../services/user.service';
+import { AudioService } from '../../services/audio.service';
+import { NotificationService } from '../../services/notification.service';
 import { User } from '../../models/user.model';
 import { Message } from '../../models/message.model';
 
@@ -95,10 +97,21 @@ import { Message } from '../../models/message.model';
               </svg>
             </button>
             <div class="chat-user-info">
-              <img [src]="selectedUser()!.avatar" [alt]="selectedUser()!.name" class="avatar">
+              <div class="avatar-wrapper">
+                <img [src]="selectedUser()!.avatar" [alt]="selectedUser()!.name" class="avatar">
+                @if (isUserOnline(selectedUser())) {
+                  <span class="online-indicator"></span>
+                }
+              </div>
               <div>
                 <h3>{{ selectedUser()!.name }}</h3>
-                <span class="user-status">{{ selectedUser()!.status }}</span>
+                @if (isUserTyping(selectedUser())) {
+                  <span class="user-status typing">typing...</span>
+                } @else {
+                  <span class="user-status" [class.online]="isUserOnline(selectedUser())">
+                    {{ isUserOnline(selectedUser()) ? 'online' : 'offline' }}
+                  </span>
+                }
               </div>
             </div>
           </div>
@@ -129,6 +142,7 @@ import { Message } from '../../models/message.model';
             <input 
               type="text" 
               [(ngModel)]="messageInput"
+              (input)="onTyping()"
               (keyup.enter)="sendMessage()"
               placeholder="Type a message..."
               class="message-input"
@@ -150,11 +164,17 @@ import { Message } from '../../models/message.model';
   `,
   styleUrl: './chat.component.css'
 })
-export class ChatComponent implements OnInit, OnDestroy {
+export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   authService = inject(AuthService);
   chatService = inject(ChatService);
   socketService = inject(SocketService);
   private userService = inject(UserService);
+  private audioService = inject(AudioService);
+  private notificationService = inject(NotificationService);
+
+  @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
+  private shouldScrollToBottom = true;
+  private typingTimeout: any;
 
   currentUser = this.authService.currentUser;
   searchQuery = '';
@@ -165,6 +185,8 @@ export class ChatComponent implements OnInit, OnDestroy {
   conversations = signal<any[]>([]);
   chatMessages = signal<Message[]>([]);
   mobileShowChat = signal(false);
+  typingUsers = signal<Set<string>>(new Set());
+  onlineUserIds = signal<Set<string>>(new Set());
 
   constructor() {
     // Listen to socket messages
@@ -177,12 +199,58 @@ export class ChatComponent implements OnInit, OnDestroy {
         const selectedId = (selected as any)._id || selected.id;
         const senderId = (lastMsg.sender as any)?._id || (lastMsg.sender as any)?.id || lastMsg.sender;
         const receiverId = (lastMsg.receiver as any)?._id || (lastMsg.receiver as any)?.id || lastMsg.receiver;
+        const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
         
         if (senderId === selectedId || receiverId === selectedId) {
           this.chatMessages.update(msgs => [...msgs, lastMsg]);
+          this.shouldScrollToBottom = true;
+          
+          // Play sound and show notification for received messages
+          if (senderId === selectedId && receiverId === currentUserId) {
+            this.audioService.playReceive();
+            
+            // Show notification if not focused on chat
+            const senderName = (lastMsg.sender as any)?.name || (lastMsg.sender as any)?.email;
+            const senderAvatar = (lastMsg.sender as any)?.avatar;
+            this.notificationService.showMessageNotification(senderName, lastMsg.content, senderAvatar);
+          }
         }
       }
     });
+
+    // Listen to online/offline status
+    effect(() => {
+      const onlineUsers = this.socketService.onlineUsers();
+      this.onlineUserIds.set(new Set(onlineUsers));
+    });
+
+    // Listen to typing indicators
+    effect(() => {
+      const typingMap = this.socketService.typingUsers();
+      const typingSet = new Set<string>();
+      typingMap.forEach((isTyping, userId) => {
+        if (isTyping) typingSet.add(userId);
+      });
+      this.typingUsers.set(typingSet);
+    });
+  }
+
+  ngAfterViewChecked(): void {
+    if (this.shouldScrollToBottom) {
+      this.scrollToBottom();
+    }
+  }
+
+  private scrollToBottom(): void {
+    try {
+      if (this.messagesContainer) {
+        const element = this.messagesContainer.nativeElement;
+        element.scrollTop = element.scrollHeight;
+        this.shouldScrollToBottom = false;
+      }
+    } catch (err) {
+      console.error('Scroll error:', err);
+    }
   }
 
   ngOnInit(): void {
@@ -233,6 +301,10 @@ export class ChatComponent implements OnInit, OnDestroy {
     const userId = (user as any)._id || user.id;
     if (userId) {
       this.loadChatHistory(userId);
+      this.shouldScrollToBottom = true;
+      
+      // Mark messages as read
+      this.markMessagesAsRead(userId);
     }
   }
 
@@ -290,9 +362,28 @@ export class ChatComponent implements OnInit, OnDestroy {
       next: (response) => {
         if (response.success) {
           this.chatMessages.set(response.data.messages);
+          this.shouldScrollToBottom = true;
         }
       },
       error: (error) => console.error('Error loading chat history:', error)
+    });
+  }
+
+  markMessagesAsRead(senderId: string): void {
+    this.chatService.markAsRead(senderId).subscribe({
+      next: () => {
+        // Update local messages to read status
+        this.chatMessages.update(msgs =>
+          msgs.map(msg => {
+            const msgSenderId = (msg.sender as any)?._id || (msg.sender as any)?.id;
+            if (msgSenderId === senderId && msg.status !== 'read') {
+              return { ...msg, status: 'read' };
+            }
+            return msg;
+          })
+        );
+      },
+      error: (error) => console.error('Error marking messages as read:', error)
     });
   }
 
@@ -309,7 +400,45 @@ export class ChatComponent implements OnInit, OnDestroy {
     }
 
     this.socketService.sendMessage(receiverId, content);
+    this.audioService.playSend();
     this.messageInput = '';
+    this.shouldScrollToBottom = true;
+    
+    // Stop typing indicator
+    this.socketService.stopTyping(receiverId);
+  }
+
+  onTyping(): void {
+    const selected = this.selectedUser();
+    if (!selected) return;
+
+    const receiverId = (selected as any)._id || selected.id;
+    if (!receiverId) return;
+
+    // Start typing
+    this.socketService.startTyping(receiverId);
+
+    // Clear existing timeout
+    if (this.typingTimeout) {
+      clearTimeout(this.typingTimeout);
+    }
+
+    // Stop typing after 2 seconds of inactivity
+    this.typingTimeout = setTimeout(() => {
+      this.socketService.stopTyping(receiverId);
+    }, 2000);
+  }
+
+  isUserOnline(user: User | null): boolean {
+    if (!user) return false;
+    const userId = (user as any)._id || user.id;
+    return this.onlineUserIds().has(userId);
+  }
+
+  isUserTyping(user: User | null): boolean {
+    if (!user) return false;
+    const userId = (user as any)._id || user.id;
+    return this.typingUsers().has(userId);
   }
 
   backToContacts(): void {
