@@ -250,14 +250,19 @@
 .message {
   display: flex;
   justify-content: flex-start;
+  position: relative;
 }
 
 .message.sent {
   justify-content: flex-end;
 }
 
-.message-content {
+.message-bubble-wrapper {
   max-width: 70%;
+  position: relative;
+}
+
+.message-content {
   padding: 0.75rem 1rem;
   border-radius: 12px;
   background-color: white;
@@ -267,6 +272,84 @@
 .message.sent .message-content {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+}
+
+.message-actions {
+  position: absolute;
+  bottom: -8px;
+  right: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.btn-reaction {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+  position: relative;
+}
+
+.btn-reaction:hover {
+  background-color: #f5f5f5;
+  transform: scale(1.1);
+}
+
+.btn-reaction svg {
+  color: #666;
+}
+
+.message-reactions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.reaction-badge {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.reaction-badge:hover {
+  background-color: #f0f0f0;
+  transform: scale(1.05);
+}
+
+.reaction-badge.my-reaction {
+  background: linear-gradient(135deg, #e8eaf6 0%, #f3e5f5 100%);
+  border-color: #667eea;
+  font-weight: 600;
+}
+
+.message.sent .message-reactions .reaction-badge {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.message.sent .message-reactions .reaction-badge.my-reaction {
+  background: rgba(255, 255, 255, 1);
+  border-color: white;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3);
 }
 
 .message-content p {
@@ -380,6 +463,19 @@
 
   .message-content {
     max-width: 85%;
+  }
+
+  .message-bubble-wrapper {
+    max-width: 85%;
+  }
+
+  .message-actions {
+    bottom: -12px;
+  }
+
+  .btn-reaction {
+    width: 32px;
+    height: 32px;
   }
 }
 

@@ -89,6 +89,21 @@ export class SocketService {
       console.log('📬 Messages read:', data);
       // Messages will be updated via the message:status events or on reload
     });
+
+    // Handle message reactions
+    this.socket.on('message:reaction', (data: { messageId: string; reactions: any[]; updatedBy: string }) => {
+      console.log('😊 Reaction update:', data);
+      // Update message reactions in local state
+      this.messages.update(msgs =>
+        msgs.map(msg =>
+          msg._id === data.messageId ? { ...msg, reactions: data.reactions } : msg
+        )
+      );
+    });
+
+    this.socket.on('reaction:error', (data: { message: string }) => {
+      console.error('❌ Reaction error:', data.message);
+    });
   }
 
   disconnect(): void {
@@ -126,6 +141,12 @@ export class SocketService {
   markAllAsRead(senderId: string): void {
     if (this.socket) {
       this.socket.emit('messages:read', { senderId });
+    }
+  }
+
+  reactToMessage(messageId: string, emoji: string): void {
+    if (this.socket) {
+      this.socket.emit('message:react', { messageId, emoji });
     }
   }
 }

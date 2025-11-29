@@ -7,12 +7,13 @@ import { SocketService } from '../../services/socket.service';
 import { UserService } from '../../services/user.service';
 import { AudioService } from '../../services/audio.service';
 import { NotificationService } from '../../services/notification.service';
+import { EmojiPickerComponent } from '../emoji-picker/emoji-picker.component';
 import { User } from '../../models/user.model';
 import { Message } from '../../models/message.model';
 
 @Component({
   selector: 'app-chat',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, EmojiPickerComponent],
   template: `
     <div class="chat-container">
       <!-- Sidebar -->
@@ -120,16 +121,58 @@ import { Message } from '../../models/message.model';
           <div class="messages-area" #messagesContainer>
             @for (message of chatMessages(); track message._id) {
               <div class="message" [class.sent]="message.sender.id === currentUser()?.id || message.sender._id === currentUser()?.id">
-                <div class="message-content">
-                  <p>{{ message.content }}</p>
-                  <div class="message-meta">
-                    <span class="time">{{ formatTime(message.createdAt) }}</span>
-                    @if (message.sender.id === currentUser()?.id || message.sender._id === currentUser()?.id) {
-                      <span class="status">
-                        @if (message.status === 'sent') { ✓ }
-                        @if (message.status === 'delivered') { ✓✓ }
-                        @if (message.status === 'read') { <span class="read-tick">✓✓</span> }
-                      </span>
+                <div class="message-bubble-wrapper">
+                  <div class="message-content">
+                    <p>{{ message.content }}</p>
+                    <div class="message-meta">
+                      <span class="time">{{ formatTime(message.createdAt) }}</span>
+                      @if (message.sender.id === currentUser()?.id || message.sender._id === currentUser()?.id) {
+                        <span class="status">
+                          @if (message.status === 'sent') { ✓ }
+                          @if (message.status === 'delivered') { ✓✓ }
+                          @if (message.status === 'read') { <span class="read-tick">✓✓</span> }
+                        </span>
+                      }
+                    </div>
+                  </div>
+                  
+                  <!-- Reactions Display -->
+                  @if (message.reactions && message.reactions.length > 0) {
+                    <div class="message-reactions">
+                      @for (reactionGroup of groupReactions(message.reactions); track reactionGroup.emoji) {
+                        <button 
+                          class="reaction-badge"
+                          [class.my-reaction]="hasUserReacted(message.reactions, reactionGroup.emoji)"
+                          (click)="reactToMessage(message._id!, reactionGroup.emoji)"
+                          [title]="getReactionTooltip(reactionGroup)"
+                        >
+                          {{ reactionGroup.emoji }} {{ reactionGroup.count }}
+                        </button>
+                      }
+                    </div>
+                  }
+                  
+                  <!-- Reaction Button -->
+                  <div class="message-actions">
+                    <button 
+                      class="btn-reaction" 
+                      (click)="toggleEmojiPicker(message._id!)"
+                      title="React to message"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                        <line x1="9" y1="9" x2="9.01" y2="9"/>
+                        <line x1="15" y1="9" x2="15.01" y2="9"/>
+                      </svg>
+                    </button>
+                    
+                    <!-- Emoji Picker -->
+                    @if (showEmojiPicker() === message._id) {
+                      <app-emoji-picker
+                        [isOpen]="true"
+                        (emojiSelected)="onEmojiSelect(message._id!, $event)"
+                      />
                     }
                   </div>
                 </div>
@@ -187,6 +230,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   mobileShowChat = signal(false);
   typingUsers = signal<Set<string>>(new Set());
   onlineUserIds = signal<Set<string>>(new Set());
+  showEmojiPicker = signal<string | null>(null); // messageId or null
 
   constructor() {
     // Listen to socket messages
@@ -238,13 +282,21 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     effect(() => {
       const socketMessages = this.socketService.messages();
       
-      // Update status of existing messages
+      // Update status and reactions of existing messages
       if (socketMessages.length > 0) {
         socketMessages.forEach(socketMsg => {
           this.chatMessages.update(msgs =>
-            msgs.map(msg =>
-              msg._id === socketMsg._id ? { ...msg, status: socketMsg.status } : msg
-            )
+            msgs.map(msg => {
+              if (msg._id === socketMsg._id) {
+                // Update both status and reactions
+                return { 
+                  ...msg, 
+                  status: socketMsg.status,
+                  reactions: socketMsg.reactions || msg.reactions
+                };
+              }
+              return msg;
+            })
           );
         });
       }
@@ -500,5 +552,55 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   formatTime(date: Date): string {
     const d = new Date(date);
     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  toggleEmojiPicker(messageId: string): void {
+    this.showEmojiPicker.set(this.showEmojiPicker() === messageId ? null : messageId);
+  }
+
+  onEmojiSelect(messageId: string, emoji: string): void {
+    this.reactToMessage(messageId, emoji);
+    this.showEmojiPicker.set(null);
+  }
+
+  reactToMessage(messageId: string, emoji: string): void {
+    this.socketService.reactToMessage(messageId, emoji);
+  }
+
+  groupReactions(reactions: any[]): { emoji: string; count: number; users: any[] }[] {
+    const grouped = new Map<string, { emoji: string; count: number; users: any[] }>();
+    
+    reactions.forEach(reaction => {
+      const existing = grouped.get(reaction.emoji);
+      if (existing) {
+        existing.count++;
+        existing.users.push(reaction.userId);
+      } else {
+        grouped.set(reaction.emoji, {
+          emoji: reaction.emoji,
+          count: 1,
+          users: [reaction.userId]
+        });
+      }
+    });
+    
+    return Array.from(grouped.values());
+  }
+
+  hasUserReacted(reactions: any[], emoji: string): boolean {
+    const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
+    return reactions.some(r => {
+      const userId = r.userId?._id || r.userId?.id || r.userId;
+      return userId === currentUserId && r.emoji === emoji;
+    });
+  }
+
+  getReactionTooltip(reactionGroup: { emoji: string; count: number; users: any[] }): string {
+    if (reactionGroup.count === 1) {
+      const user = reactionGroup.users[0];
+      const name = user?.name || user?.email || 'Someone';
+      return name;
+    }
+    return `${reactionGroup.count} people`;
   }
 }

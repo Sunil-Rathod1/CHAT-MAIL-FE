@@ -9,8 +9,15 @@ export interface Message {
   fileSize?: number;
   status: 'sent' | 'delivered' | 'read';
   readAt?: Date;
+  reactions?: Reaction[];
   createdAt: Date;
   updatedAt?: Date;
+}
+
+export interface Reaction {
+  userId: any;
+  emoji: string;
+  createdAt: Date;
 }
 
 export interface Conversation {
