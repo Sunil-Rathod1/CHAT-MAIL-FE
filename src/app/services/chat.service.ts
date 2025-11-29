@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
-import { ChatHistory, Conversation, Message } from '../models/message.model';
+import { ChatHistory, Conversation, Message, UploadedImage } from '../models/message.model';
 import { environment } from '../../environments/environment';
 
 @Injectable({
@@ -63,5 +63,18 @@ export class ChatService {
 
   addMessage(message: Message): void {
     this.chatMessages.update(msgs => [...msgs, message]);
+  }
+
+  // ============= PHASE 2: IMAGE UPLOAD =============
+
+  uploadImage(file: File): Observable<{ success: boolean; data: UploadedImage }> {
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    return this.http.post<{ success: boolean; data: UploadedImage }>(
+      `${this.apiUrl}/upload/image`,
+      formData,
+      { headers: this.getHeaders() }
+    );
   }
 }

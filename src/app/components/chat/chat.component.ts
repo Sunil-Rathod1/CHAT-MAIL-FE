@@ -122,59 +122,141 @@ import { Message } from '../../models/message.model';
             @for (message of chatMessages(); track message._id) {
               <div class="message" [class.sent]="message.sender.id === currentUser()?.id || message.sender._id === currentUser()?.id">
                 <div class="message-bubble-wrapper">
-                  <div class="message-content">
-                    <p>{{ message.content }}</p>
-                    <div class="message-meta">
-                      <span class="time">{{ formatTime(message.createdAt) }}</span>
-                      @if (message.sender.id === currentUser()?.id || message.sender._id === currentUser()?.id) {
-                        <span class="status">
-                          @if (message.status === 'sent') { ✓ }
-                          @if (message.status === 'delivered') { ✓✓ }
-                          @if (message.status === 'read') { <span class="read-tick">✓✓</span> }
-                        </span>
-                      }
-                    </div>
-                  </div>
-                  
-                  <!-- Reactions Display -->
-                  @if (message.reactions && message.reactions.length > 0) {
-                    <div class="message-reactions">
-                      @for (reactionGroup of groupReactions(message.reactions); track reactionGroup.emoji) {
-                        <button 
-                          class="reaction-badge"
-                          [class.my-reaction]="hasUserReacted(message.reactions, reactionGroup.emoji)"
-                          (click)="reactToMessage(message._id!, reactionGroup.emoji)"
-                          [title]="getReactionTooltip(reactionGroup)"
-                        >
-                          {{ reactionGroup.emoji }} {{ reactionGroup.count }}
-                        </button>
-                      }
-                    </div>
-                  }
-                  
-                  <!-- Reaction Button -->
-                  <div class="message-actions">
-                    <button 
-                      class="btn-reaction" 
-                      (click)="toggleEmojiPicker(message._id!)"
-                      title="React to message"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                        <line x1="9" y1="9" x2="9.01" y2="9"/>
-                        <line x1="15" y1="9" x2="15.01" y2="9"/>
-                      </svg>
-                    </button>
-                    
-                    <!-- Emoji Picker -->
-                    @if (showEmojiPicker() === message._id) {
-                      <app-emoji-picker
-                        [isOpen]="true"
-                        (emojiSelected)="onEmojiSelect(message._id!, $event)"
+                  @if (editingMessage()?._id === message._id) {
+                    <!-- Edit Mode -->
+                    <div class="message-edit-mode">
+                      <input 
+                        type="text" 
+                        [(ngModel)]="editContent"
+                        (keyup.enter)="saveEdit()"
+                        (keyup.escape)="cancelEdit()"
+                        class="edit-input"
+                        autofocus
                       />
+                      <div class="edit-actions">
+                        <button class="btn-sm" (click)="saveEdit()">Save</button>
+                        <button class="btn-sm btn-secondary" (click)="cancelEdit()">Cancel</button>
+                      </div>
+                    </div>
+                  } @else {
+                    <!-- Normal Message Display -->
+                    <div class="message-content">
+                      <!-- Reply Preview -->
+                      @if (message.replyTo) {
+                        <div class="reply-preview">
+                          <div class="reply-bar"></div>
+                          <div class="reply-content">
+                            <div class="reply-sender">{{ message.replyTo.sender?.name || 'User' }}</div>
+                            <div class="reply-text">{{ message.replyTo.content }}</div>
+                          </div>
+                        </div>
+                      }
+                      
+                      <!-- Message Content -->
+                      @if (message.deletedForEveryone) {
+                        <p class="deleted-message"><em>🚫 This message was deleted</em></p>
+                      } @else if (message.type === 'image') {
+                        <div class="message-image">
+                          <img [src]="message.content" alt="Image" />
+                        </div>
+                      } @else {
+                        <p>{{ message.content }}</p>
+                      }
+                      
+                      <div class="message-meta">
+                        <span class="time">{{ formatTime(message.createdAt) }}</span>
+                        @if (message.isEdited) {
+                          <span class="edited-label">edited</span>
+                        }
+                        @if (message.sender.id === currentUser()?.id || message.sender._id === currentUser()?.id) {
+                          <span class="status">
+                            @if (message.status === 'sent') { ✓ }
+                            @if (message.status === 'delivered') { ✓✓ }
+                            @if (message.status === 'read') { <span class="read-tick">✓✓</span> }
+                          </span>
+                        }
+                      </div>
+                    </div>
+                    
+                    <!-- Reactions Display -->
+                    @if (message.reactions && message.reactions.length > 0) {
+                      <div class="message-reactions">
+                        @for (reactionGroup of groupReactions(message.reactions); track reactionGroup.emoji) {
+                          <button 
+                            class="reaction-badge"
+                            [class.my-reaction]="hasUserReacted(message.reactions, reactionGroup.emoji)"
+                            (click)="reactToMessage(message._id!, reactionGroup.emoji)"
+                            [title]="getReactionTooltip(reactionGroup)"
+                          >
+                            {{ reactionGroup.emoji }} {{ reactionGroup.count }}
+                          </button>
+                        }
+                      </div>
                     }
-                  </div>
+                    
+                    <!-- Message Actions -->
+                    @if (!message.deletedForEveryone) {
+                      <div class="message-actions">
+                        <button 
+                          class="btn-action" 
+                          (click)="startReply(message)"
+                          title="Reply"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <polyline points="9 17 4 12 9 7"/>
+                            <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                          </svg>
+                        </button>
+                        
+                        @if (canEditMessage(message)) {
+                          <button 
+                            class="btn-action" 
+                            (click)="startEdit(message)"
+                            title="Edit"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                          </button>
+                        }
+                        
+                        @if (canDeleteMessage(message)) {
+                          <button 
+                            class="btn-action" 
+                            (click)="confirmDelete(message)"
+                            title="Delete"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        }
+                        
+                        <button 
+                          class="btn-action" 
+                          (click)="toggleEmojiPicker(message._id!)"
+                          title="React"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                            <line x1="9" y1="9" x2="9.01" y2="9"/>
+                            <line x1="15" y1="9" x2="15.01" y2="9"/>
+                          </svg>
+                        </button>
+                        
+                        <!-- Emoji Picker -->
+                        @if (showEmojiPicker() === message._id) {
+                          <app-emoji-picker
+                            [isOpen]="true"
+                            (emojiSelected)="onEmojiSelect(message._id!, $event)"
+                          />
+                        }
+                      </div>
+                    }
+                  }
                 </div>
               </div>
             }
@@ -182,12 +264,65 @@ import { Message } from '../../models/message.model';
 
           <!-- Input Area -->
           <div class="input-area">
-            <input 
-              type="text" 
-              [(ngModel)]="messageInput"
-              (input)="onTyping()"
-              (keyup.enter)="sendMessage()"
-              placeholder="Type a message..."
+            <!-- Reply Preview Bar -->
+            @if (replyingTo()) {
+              <div class="replying-to-bar">
+                <div class="reply-info">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <polyline points="9 17 4 12 9 7"/>
+                    <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                  </svg>
+                  <div>
+                    <div class="reply-label">Replying to {{ replyingTo()!.sender?.name || 'User' }}</div>
+                    <div class="reply-preview-text">{{ replyingTo()!.content }}</div>
+                  </div>
+                </div>
+                <button class="btn-close" (click)="cancelReply()">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            }
+            
+            <!-- Image Preview -->
+            @if (imagePreview()) {
+              <div class="image-upload-preview">
+                <img [src]="imagePreview()" alt="Preview" />
+                <div class="preview-actions">
+                  <button class="btn-sm" (click)="uploadImage()" [disabled]="uploadingImage()">
+                    {{ uploadingImage() ? 'Uploading...' : 'Send Image' }}
+                  </button>
+                  <button class="btn-sm btn-secondary" (click)="cancelImageUpload()" [disabled]="uploadingImage()">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            }
+            
+            <div class="input-controls">
+              <input 
+                type="file" 
+                accept="image/*" 
+                (change)="onFileSelected($event)"
+                #fileInput
+                style="display: none;"
+              />
+              <button class="btn-icon" (click)="fileInput.click()" title="Send image">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </button>
+              
+              <input 
+                type="text" 
+                [(ngModel)]="messageInput"
+                (input)="onTyping()"
+                (keyup.enter)="sendMessage()"
+                placeholder="Type a message..."
               class="message-input"
             />
             <button class="btn-send" (click)="sendMessage()" [disabled]="!messageInput.trim()">
@@ -203,6 +338,21 @@ import { Message } from '../../models/message.model';
           </div>
         }
       </div>
+      
+      <!-- Delete Confirmation Dialog -->
+      @if (showDeleteDialog()) {
+        <div class="modal-overlay" (click)="cancelDelete()">
+          <div class="modal-content" (click)="$event.stopPropagation()">
+            <h3>Delete Message</h3>
+            <p>Choose how you want to delete this message:</p>
+            <div class="modal-actions">
+              <button class="btn-danger" (click)="deleteMessage('me')">Delete for Me</button>
+              <button class="btn-danger" (click)="deleteMessage('everyone')">Delete for Everyone</button>
+              <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styleUrl: './chat.component.css'
@@ -231,6 +381,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   typingUsers = signal<Set<string>>(new Set());
   onlineUserIds = signal<Set<string>>(new Set());
   showEmojiPicker = signal<string | null>(null); // messageId or null
+  
+  // Phase 2 features
+  replyingTo = signal<Message | null>(null);
+  editingMessage = signal<Message | null>(null);
+  editContent = '';
+  showDeleteDialog = signal<Message | null>(null);
+  uploadingImage = signal<boolean>(false);
+  imagePreview = signal<string | null>(null);
+  selectedFile = signal<File | null>(null);
 
   constructor() {
     // Listen to socket messages
@@ -315,6 +474,43 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
               : msg
           )
         );
+      }
+    });
+
+    // Phase 2: Listen to message edits
+    effect(() => {
+      const editUpdate = this.socketService.messageEdited();
+      if (editUpdate) {
+        console.log('✏️ Message edited:', editUpdate);
+        this.chatMessages.update(msgs =>
+          msgs.map(msg =>
+            msg._id === editUpdate.messageId
+              ? { ...msg, content: editUpdate.newContent, isEdited: true, editedAt: editUpdate.editedAt }
+              : msg
+          )
+        );
+      }
+    });
+
+    // Phase 2: Listen to message deletions
+    effect(() => {
+      const deleteUpdate = this.socketService.messageDeleted();
+      if (deleteUpdate) {
+        console.log('🗑️ Message deleted:', deleteUpdate);
+        if (deleteUpdate.deleteType === 'everyone') {
+          this.chatMessages.update(msgs =>
+            msgs.map(msg =>
+              msg._id === deleteUpdate.messageId
+                ? { ...msg, deletedForEveryone: true, deletedAt: new Date(), content: 'This message was deleted' }
+                : msg
+            )
+          );
+        } else {
+          // For 'me' deletions, filter out the message
+          this.chatMessages.update(msgs =>
+            msgs.filter(msg => msg._id !== deleteUpdate.messageId)
+          );
+        }
       }
     });
   }
@@ -490,9 +686,17 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       return;
     }
 
-    this.socketService.sendMessage(receiverId, content);
+    // Build replyTo data if replying
+    const replyTo = this.replyingTo() ? {
+      messageId: this.replyingTo()!._id!,
+      content: this.replyingTo()!.content,
+      sender: this.replyingTo()!.sender
+    } : undefined;
+
+    this.socketService.sendMessage(receiverId, content, 'text');
     this.audioService.playSend();
     this.messageInput = '';
+    this.replyingTo.set(null);
     this.shouldScrollToBottom = true;
     
     // Stop typing indicator
@@ -618,5 +822,176 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       return name;
     }
     return `${reactionGroup.count} people`;
+  }
+
+  // ============= PHASE 2: REPLY FEATURE =============
+
+  startReply(message: Message): void {
+    this.replyingTo.set(message);
+    this.editingMessage.set(null);
+  }
+
+  cancelReply(): void {
+    this.replyingTo.set(null);
+  }
+
+  // ============= PHASE 2: EDIT FEATURE =============
+
+  startEdit(message: Message): void {
+    // Can only edit own messages within 15 minutes
+    const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
+    const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
+    
+    if (senderId !== currentUserId) return;
+    
+    const messageTime = new Date(message.createdAt).getTime();
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    
+    if (now - messageTime > fifteenMinutes) {
+      alert('Messages can only be edited within 15 minutes');
+      return;
+    }
+
+    this.editingMessage.set(message);
+    this.editContent = message.content;
+    this.replyingTo.set(null);
+  }
+
+  saveEdit(): void {
+    const message = this.editingMessage();
+    if (!message || !this.editContent.trim()) return;
+
+    this.socketService.editMessage({
+      messageId: message._id!,
+      newContent: this.editContent.trim()
+    });
+
+    this.editingMessage.set(null);
+    this.editContent = '';
+  }
+
+  cancelEdit(): void {
+    this.editingMessage.set(null);
+    this.editContent = '';
+  }
+
+  // ============= PHASE 2: DELETE FEATURE =============
+
+  confirmDelete(message: Message): void {
+    this.showDeleteDialog.set(message);
+  }
+
+  deleteMessage(deleteType: 'me' | 'everyone'): void {
+    const message = this.showDeleteDialog();
+    if (!message) return;
+
+    // Check time limit for delete everyone (1 hour)
+    if (deleteType === 'everyone') {
+      const messageTime = new Date(message.createdAt).getTime();
+      const now = Date.now();
+      const oneHour = 60 * 60 * 1000;
+      
+      if (now - messageTime > oneHour) {
+        alert('Messages can only be deleted for everyone within 1 hour');
+        this.showDeleteDialog.set(null);
+        return;
+      }
+    }
+
+    this.socketService.deleteMessage({
+      messageId: message._id!,
+      deleteType
+    });
+
+    this.showDeleteDialog.set(null);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteDialog.set(null);
+  }
+
+  // ============= PHASE 2: IMAGE UPLOAD FEATURE =============
+
+  onFileSelected(event: any): void {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Check file size (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image size must be less than 10MB');
+      return;
+    }
+
+    this.selectedFile.set(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e: any) => {
+      this.imagePreview.set(e.target.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  uploadImage(): void {
+    const file = this.selectedFile();
+    if (!file) return;
+
+    this.uploadingImage.set(true);
+
+    this.chatService.uploadImage(file).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          // Send image message
+          const selected = this.selectedUser();
+          if (selected) {
+            const receiverId = (selected as any)._id || selected.id;
+            this.socketService.sendMessage(receiverId, response.data.url, 'image');
+          }
+          
+          this.cancelImageUpload();
+        }
+      },
+      error: (error) => {
+        console.error('Image upload failed:', error);
+        alert('Failed to upload image');
+        this.uploadingImage.set(false);
+      },
+      complete: () => {
+        this.uploadingImage.set(false);
+      }
+    });
+  }
+
+  cancelImageUpload(): void {
+    this.selectedFile.set(null);
+    this.imagePreview.set(null);
+    this.uploadingImage.set(false);
+  }
+
+  canEditMessage(message: Message): boolean {
+    const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
+    const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
+    
+    if (senderId !== currentUserId) return false;
+    
+    const messageTime = new Date(message.createdAt).getTime();
+    const now = Date.now();
+    const fifteenMinutes = 15 * 60 * 1000;
+    
+    return (now - messageTime) <= fifteenMinutes;
+  }
+
+  canDeleteMessage(message: Message): boolean {
+    const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
+    const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
+    
+    return senderId === currentUserId;
   }
 }
