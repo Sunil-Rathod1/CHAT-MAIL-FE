@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
 import { Router } from '@angular/router';
 import { AuthResponse, LoginCredentials, RegisterCredentials, User } from '../models/user.model';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -11,7 +12,7 @@ export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
   
-  private apiUrl = 'https://chat-mail-be.onrender.com/api/auth';
+  private apiUrl = `${environment.apiUrl}/auth`;
   
   currentUser = signal<User | null>(null);
   isAuthenticated = signal<boolean>(false);

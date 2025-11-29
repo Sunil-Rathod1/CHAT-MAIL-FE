@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { User } from '../models/user.model';
 import { AuthService } from './auth.service';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -11,7 +12,7 @@ export class UserService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
   
-  private apiUrl = 'https://chat-mail-be.onrender.com/api/user';
+  private apiUrl = `${environment.apiUrl}/user`;
 
   private getHeaders(): HttpHeaders {
     const token = this.authService.getToken();

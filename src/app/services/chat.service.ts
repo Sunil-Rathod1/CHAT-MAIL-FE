@@ -3,6 +3,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { AuthService } from './auth.service';
 import { ChatHistory, Conversation, Message } from '../models/message.model';
+import { environment } from '../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -11,7 +12,7 @@ export class ChatService {
   private http = inject(HttpClient);
   private authService = inject(AuthService);
   
-  private apiUrl = 'https://chat-mail-be.onrender.com/api/chat';
+  private apiUrl = `${environment.apiUrl}/chat`;
   
   activeChat = signal<string | null>(null);
   chatMessages = signal<Message[]>([]);
