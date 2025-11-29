@@ -233,6 +233,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       });
       this.typingUsers.set(typingSet);
     });
+
+    // Listen to message status updates from socket
+    effect(() => {
+      const socketMessages = this.socketService.messages();
+      
+      // Update status of existing messages
+      if (socketMessages.length > 0) {
+        socketMessages.forEach(socketMsg => {
+          this.chatMessages.update(msgs =>
+            msgs.map(msg =>
+              msg._id === socketMsg._id ? { ...msg, status: socketMsg.status } : msg
+            )
+          );
+        });
+      }
+    });
   }
 
   ngAfterViewChecked(): void {
@@ -256,6 +272,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   ngOnInit(): void {
     this.socketService.connect();
     this.loadConversations();
+    // Request notification permission
+    this.notificationService.requestPermission();
   }
 
   ngOnDestroy(): void {
@@ -370,8 +388,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   markMessagesAsRead(senderId: string): void {
+    // Mark via socket for real-time update
+    this.socketService.markAllAsRead(senderId);
+    
+    // Also mark via HTTP API
     this.chatService.markAsRead(senderId).subscribe({
       next: () => {
+        console.log('✓ Messages marked as read');
         // Update local messages to read status
         this.chatMessages.update(msgs =>
           msgs.map(msg => {

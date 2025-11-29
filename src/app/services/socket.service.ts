@@ -42,11 +42,24 @@ export class SocketService {
       this.messages.update(msgs => [...msgs, message]);
     });
 
+    // Receive full list of online users on connect
+    this.socket.on('users:online', (data: { userIds: string[] }) => {
+      console.log('📋 Online users:', data.userIds);
+      this.onlineUsers.set(data.userIds);
+    });
+
     this.socket.on('user:online', (data: { userId: string }) => {
-      this.onlineUsers.update(users => [...users, data.userId]);
+      console.log('🟢 User online:', data.userId);
+      this.onlineUsers.update(users => {
+        if (!users.includes(data.userId)) {
+          return [...users, data.userId];
+        }
+        return users;
+      });
     });
 
     this.socket.on('user:offline', (data: { userId: string }) => {
+      console.log('⚫ User offline:', data.userId);
       this.onlineUsers.update(users => users.filter(id => id !== data.userId));
     });
 
@@ -63,11 +76,18 @@ export class SocketService {
     });
 
     this.socket.on('message:status', (data: { messageId: string; status: string }) => {
+      console.log('📬 Message status update:', data);
       this.messages.update(msgs => 
         msgs.map(msg => 
           msg._id === data.messageId ? { ...msg, status: data.status as any } : msg
         )
       );
+    });
+
+    // Handle bulk messages read
+    this.socket.on('messages:read', (data: { receiverId: string; count: number }) => {
+      console.log('📬 Messages read:', data);
+      // Messages will be updated via the message:status events or on reload
     });
   }
 
@@ -100,6 +120,12 @@ export class SocketService {
   markAsRead(messageId: string, senderId: string): void {
     if (this.socket) {
       this.socket.emit('message:read', { messageId, senderId });
+    }
+  }
+
+  markAllAsRead(senderId: string): void {
+    if (this.socket) {
+      this.socket.emit('messages:read', { senderId });
     }
   }
 }

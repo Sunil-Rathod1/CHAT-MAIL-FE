@@ -10,20 +10,106 @@ export class AudioService {
   private enabled = true;
 
   constructor() {
-    // Create audio elements with base64 encoded sounds
+    // Create audio elements
     this.sendSound = new Audio();
     this.receiveSound = new Audio();
     this.notificationSound = new Audio();
     
-    // Simple beep sounds using data URIs
-    // Send sound - higher pitch, shorter
-    this.sendSound.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFgZqVqJednqKloKGkoqSlpKKjoqOko6KhoZ+dnJqYlpSTkZCPjo2Mjouoh5SIkYqUjJaOmI+akZySnJScnJ2cnJydnJ2cnZycnJycnJ2cnZudnJ2bnJuam5qampmamZmYmZiYmJeYl5eWl5aWlZaVlZSVlJWUlJSTlJOUk5STk5SbmpucnZ6fn6CgoqGio6SjpKOko6OkpKOko6OjoqOiop+gnpqWlI+Lh4N/e3d0c21qaGVjYmBdXVpcWVtYWFdYVldWVldWVVZVVVRVVFVUVFNUU1NTUlNSUlJRUlFRUVBRUFBQT1BPUFBPT1BPT05PTk5OTU1OTU1MTExMS0xLSkpLSkpKSUpKSUpJSUlIR0hHR0dGR0ZGRkVFRkVERUVERERDREREQ0NFREVFRUVGR0ZHR0hISUpKS0pLS0xMTExNTU5OT09PT1BQUFBRUVBRUlFSUlJTU1RUU1RVVVZVVlZXV1hYWVlaWltcXFxdXl1eX2BhYGFiY2RkZWZnaGhpamprbGxtbm9vcHFxcnN0dHV2d3d4eXt6e3x9foB/gIGCg4SFhoeHiImKiouMjY2Oj5CRkZKTk5SVlZaXl5iZmpqbnJ2dnp+fn6ChoaKio6SjpKWlpqamp6eoqKmpqqqrq6usrKytra6urq+vr6+wsbCxsbGysrGysrKxsrKysrGysrGxsrKysrGxsbCxsLCvr6+ur66urq2trKysq6qqqamop6emoqChpKOioqGhn5+enZuamZiYl5aVlJOSkI+OjYuKiYiHhYSCgYB+fXt6eXh3dXRzcnFvb21sa2ppZ2dmZWNiYWBfXVxbWllYV1ZVVFNSUVBPTk1MS0pJSEdGRURDQkFAPz49PDo7Ojk4Nzc2NTU0MzMxMjExLzAvLy4uLS0sKywrKiopKCkoJygnJycmJSYlJCQjJCMjIiMiISEhICEgIB8fHx8eHh4dHR0cHBwcGxwbGxoaGhkZGRkYGRgYGBcXFxcWFhYVFRUVFBQUExQTEhMSEhEREhERERAPDw8QEBEQEA8PDg4ODg4NDQ0MDA0MDAwLCwsLCgsKCgkKCQkJCQgICAgIBwcHBwcGBgYGBQUFBQQFBAQEAwMDAwIDAgICAQIBAQEBAAABAAAAAAAAAAAA';
+    // WhatsApp/Phone-like notification sounds
+    // Send sound - short pop
+    this.sendSound.src = this.createTone(800, 0.05, 0.3);
     
-    // Receive sound - lower pitch, slightly longer
-    this.receiveSound.src = 'data:audio/wav;base64,UklGRnoGAABXQVZFZm14IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBgoOFhoeIioyNjpCRk5SVl5manJ2foKKkpqeqq62vsLK0tbW3uLq7vL2+v8DBwsPDxMXFxsbHx8jIycnJycrKysnKycnJyMjIxsbGxcTEw8LBwb++vbu6uLe2tLOyr6+trKqop6Wko6Gfnp2bmpeWlJKRj42MiomIhoWEg4GAfXt5eHZ1c3FwbmxqaWhmaWNhYV5cW1lYVlVUUlFPT05NTEtJSEdGRkVEQ0JBQEBAQEBBQUJDREVGRkdJSktMTU1OT1BQUVJSU1RUVVZXWFhaWltcXF1eX2BiY2RlZWdnaGpqbG1ubm9wcXN0dHV3d3h5e3t8fX5/gIGCg4SGhoeIiYqMjI2Oj5CSk5OVlpaYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLS1trO7vby+v8DBwsPEw8TFxcbGx8fIyMjJycnKycrKysrJycnIyMfHxsbFxMTDwsLBv7++vLu6uLe1tLKxr62sqaelnJuYlpSTkY6Ni4mHhYOBfnx5dnNwa2hkYl1aVlNPTEhFQT48OjczMi4rJygmJCMhHx4dGxsaGRgXFxYVFRQUExISEhEREBAPDw8ODg4NDQ0MDAwMCwsLCwoLCgoKCQkJCQgJCAcIBwcHBgYGBgYFBQUFBAUEBAQEAwMDAwMCAwICAgIBAQEBAQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAEAAAEBAAEBAQIBAgIDAgIDAwMEAwQFBQUGBgYHBwcICQgJCgoLCwwMDA0NDg4ODw8PEBARERISEhMUFBQVFRYXFxgYGRobGhscHR0eHyAgISIjJCQmJycoKSorKy0uLi8wMTI0NTU2Nzk5Ozs9PT5AQUJDRUZHSElKS0xNTk9QUlJTVFVWV1haWltcXV9gYWJjZGVnaGhpamttbW5wcXFzdHV2d3h5enx8fX+AgYKDhYWHh4mJi4yNjo+QkpKUlZaXmJqam5ydnp+goaKkpKWmp6iprquvsbGzs7W1t7e5ury8vb7Av8HBwsPDxMXFxsfHyMjJycrKysrLy8vLysrKycnJyMfHxsXEw8LAv727urm3trSyrquopqOhnpyYlZKOi4h8eXZzb2tlYV5aVlNPTEhEQT47NzYzLy0qKCUjIB8dGxkYFhUTEhEPDgwLCwkIBwYFBAMDAgEBAQAAAAAAAAABAAAAAQAAAAEBAQECAgIDAwQEBAUFBgYHBwgICQkKCgsLDAwNDQ4ODxAQERESEhMTFBUWFhcXGBkaGhsdHR4fHyAhIiIjJCUmJycoKSorLC0tLy8xMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6Slpqeoqaqrrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1NXW19fY2dra29vb3Nzd3d3e3t/e397e3t3d3Nzc29va2tnZ2NjX1tbV1NTT0tHQz87NzMvKycjHxsXEw8LBwL+';
+    // Receive sound - pleasant notification (tri-tone)
+    this.receiveSound.src = this.createTriTone();
     
-    // Notification sound - attention grabbing
+    // Notification sound
     this.notificationSound.src = this.receiveSound.src;
+  }
+
+  private createTone(frequency: number, duration: number, volume: number = 0.3): string {
+    const sampleRate = 44100;
+    const numSamples = Math.floor(sampleRate * duration);
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+    
+    // WAV header
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    this.writeString(view, 8, 'WAVE');
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+    
+    // Generate tone with fade out
+    for (let i = 0; i < numSamples; i++) {
+      const t = i / sampleRate;
+      const fadeOut = 1 - (i / numSamples);
+      const sample = Math.sin(2 * Math.PI * frequency * t) * volume * fadeOut * 32767;
+      view.setInt16(44 + i * 2, sample, true);
+    }
+    
+    return 'data:audio/wav;base64,' + this.arrayBufferToBase64(buffer);
+  }
+
+  private createTriTone(): string {
+    const sampleRate = 44100;
+    const noteDuration = 0.1;
+    const numSamples = Math.floor(sampleRate * noteDuration * 3);
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+    
+    // WAV header
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    this.writeString(view, 8, 'WAVE');
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+    
+    // Three tones: G4 (392Hz), E5 (659Hz), C5 (523Hz)
+    const frequencies = [659, 523, 392];
+    const samplesPerNote = Math.floor(sampleRate * noteDuration);
+    
+    for (let noteIdx = 0; noteIdx < 3; noteIdx++) {
+      const freq = frequencies[noteIdx];
+      for (let i = 0; i < samplesPerNote; i++) {
+        const t = i / sampleRate;
+        const fadeOut = 1 - (i / samplesPerNote);
+        const sample = Math.sin(2 * Math.PI * freq * t) * 0.3 * fadeOut * 32767;
+        view.setInt16(44 + (noteIdx * samplesPerNote + i) * 2, sample, true);
+      }
+    }
+    
+    return 'data:audio/wav;base64,' + this.arrayBufferToBase64(buffer);
+  }
+
+  private writeString(view: DataView, offset: number, string: string): void {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  private arrayBufferToBase64(buffer: ArrayBuffer): string {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
   }
 
   playSend(): void {

@@ -8,11 +8,17 @@ export class NotificationService {
   private enabled = true;
 
   constructor() {
-    this.requestPermission();
+    this.checkPermission();
+  }
+
+  private checkPermission(): void {
+    if ('Notification' in window) {
+      this.permission = Notification.permission;
+    }
   }
 
   async requestPermission(): Promise<void> {
-    if ('Notification' in window) {
+    if ('Notification' in window && this.permission === 'default') {
       this.permission = await Notification.requestPermission();
     }
   }
