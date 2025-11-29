@@ -301,6 +301,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         });
       }
     });
+
+    // Listen to reaction updates specifically (real-time sync)
+    effect(() => {
+      const reactionUpdate = this.socketService.reactionUpdates();
+      
+      if (reactionUpdate) {
+        console.log('🔄 Syncing reaction to chatMessages:', reactionUpdate);
+        this.chatMessages.update(msgs =>
+          msgs.map(msg =>
+            msg._id === reactionUpdate.messageId 
+              ? { ...msg, reactions: reactionUpdate.reactions }
+              : msg
+          )
+        );
+      }
+    });
   }
 
   ngAfterViewChecked(): void {

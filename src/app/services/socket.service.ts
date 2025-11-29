@@ -15,6 +15,7 @@ export class SocketService {
   messages = signal<Message[]>([]);
   onlineUsers = signal<string[]>([]);
   typingUsers = signal<Map<string, boolean>>(new Map());
+  reactionUpdates = signal<{ messageId: string; reactions: any[] } | null>(null);
 
   connect(): void {
     const token = this.authService.getToken();
@@ -99,6 +100,8 @@ export class SocketService {
           msg._id === data.messageId ? { ...msg, reactions: data.reactions } : msg
         )
       );
+      // Trigger reaction update signal for chat component to sync
+      this.reactionUpdates.set({ messageId: data.messageId, reactions: data.reactions });
     });
 
     this.socket.on('reaction:error', (data: { message: string }) => {
