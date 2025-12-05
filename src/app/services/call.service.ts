@@ -40,6 +40,7 @@ export class CallService {
   incomingCall = signal<IncomingCall | null>(null);
   localStreamSignal = signal<MediaStream | null>(null);
   remoteStreamSignal = signal<MediaStream | null>(null);
+  callError = signal<string | null>(null);
 
   private listenersInitialized = false;
 
@@ -48,11 +49,26 @@ export class CallService {
     effect(() => {
       const isConnected = this.socketService.isConnected();
       if (isConnected && !this.listenersInitialized) {
-        this.setupSocketListeners();
-        this.listenersInitialized = true;
-        console.log('📞 Call service listeners initialized');
+        // Small delay to ensure socket is fully ready
+        setTimeout(() => {
+          this.setupSocketListeners();
+          this.listenersInitialized = true;
+          console.log('📞 Call service listeners initialized');
+        }, 100);
+      } else if (!isConnected) {
+        // Reset when disconnected so we can re-initialize on reconnect
+        this.listenersInitialized = false;
       }
     });
+  }
+
+  // Public method to ensure listeners are set up (can be called from components)
+  ensureListenersInitialized(): void {
+    if (!this.listenersInitialized && this.socketService.isConnected()) {
+      this.setupSocketListeners();
+      this.listenersInitialized = true;
+      console.log('📞 Call service listeners initialized (manual)');
+    }
   }
 
   private setupSocketListeners(): void {
@@ -126,7 +142,10 @@ export class CallService {
     // Call error
     socket.on('call:error', (data: { message: string }) => {
       console.error('❌ Call error:', data.message);
+      this.callError.set(data.message);
       this.endCallCleanup();
+      // Clear error after 5 seconds
+      setTimeout(() => this.callError.set(null), 5000);
     });
 
     // WebRTC: Receive offer
@@ -166,6 +185,9 @@ export class CallService {
   // Start a call
   async initiateCall(receiverId: string, receiverInfo: CallUser, callType: 'audio' | 'video'): Promise<void> {
     try {
+      // Ensure listeners are set up before making a call
+      this.ensureListenersInitialized();
+
       // Get user media
       await this.getUserMedia(callType);
 
@@ -186,7 +208,11 @@ export class CallService {
       // Emit call initiation
       const socket = this.socketService.getSocket();
       if (socket) {
+        console.log('📞 Emitting call:initiate to', receiverId);
         socket.emit('call:initiate', { receiverId, callType });
+      } else {
+        console.error('❌ Socket not available for call');
+        throw new Error('Socket not connected');
       }
     } catch (error) {
       console.error('Error initiating call:', error);

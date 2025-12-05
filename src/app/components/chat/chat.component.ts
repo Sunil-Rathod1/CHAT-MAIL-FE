@@ -380,6 +380,18 @@ import { Message } from '../../models/message.model';
         <app-video-call />
       }
       
+      <!-- Call Error Toast -->
+      @if (callService.callError()) {
+        <div class="call-error-toast">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+          <span>{{ callService.callError() }}</span>
+        </div>
+      }
+      
       <!-- Incoming Call Notification (shown when not in call) -->
       @if (callService.incomingCall() && !callService.callState().isInCall) {
         <div class="incoming-call-overlay">
@@ -602,6 +614,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.loadConversations();
     // Request notification permission
     this.notificationService.requestPermission();
+    // Ensure call service listeners are initialized
+    setTimeout(() => {
+      this.callService.ensureListenersInitialized();
+    }, 500);
   }
 
   ngOnDestroy(): void {

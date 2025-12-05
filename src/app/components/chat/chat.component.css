@@ -1586,3 +1586,41 @@
   width: 28px;
   height: 28px;
 }
+
+/* Call Error Toast */
+.call-error-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #dc3545 0%, #ff6b6b 100%);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 4px 20px rgba(220, 53, 69, 0.4);
+  z-index: 10001;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.call-error-toast svg {
+  flex-shrink: 0;
+}
+
+.call-error-toast span {
+  font-size: 0.95rem;
+  font-weight: 500;
+}
