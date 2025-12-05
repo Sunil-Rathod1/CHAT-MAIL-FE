@@ -494,6 +494,9 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
             this.notificationService.showMessageNotification(senderName, newMsg.content, senderAvatar);
           }
         }
+
+        // Update conversations list with new message
+        this.updateConversationWithMessage(newMsg);
       }
     });
 
@@ -1146,5 +1149,41 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     if (incoming) {
       this.callService.rejectCall(incoming.callId);
     }
+  }
+
+  private updateConversationWithMessage(message: Message): void {
+    const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
+    const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
+    const receiverId = (message.receiver as any)?._id || (message.receiver as any)?.id || message.receiver;
+    
+    // Determine the other user in the conversation
+    const otherUserId = senderId === currentUserId ? receiverId : senderId;
+    
+    this.conversations.update(convs => {
+      // Check if conversation exists
+      const existingIndex = convs.findIndex(conv => {
+        const convSenderId = (conv.lastMessage.sender as any)?._id || (conv.lastMessage.sender as any)?.id;
+        const convReceiverId = (conv.lastMessage.receiver as any)?._id || (conv.lastMessage.receiver as any)?.id;
+        return (convSenderId === otherUserId || convReceiverId === otherUserId);
+      });
+
+      if (existingIndex !== -1) {
+        // Update existing conversation
+        const updated = [...convs];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          lastMessage: message
+        };
+        // Move to top
+        const [movedConv] = updated.splice(existingIndex, 1);
+        return [movedConv, ...updated];
+      } else {
+        // Add new conversation
+        return [{
+          _id: `conv_${message._id}`,
+          lastMessage: message
+        }, ...convs];
+      }
+    });
   }
 }

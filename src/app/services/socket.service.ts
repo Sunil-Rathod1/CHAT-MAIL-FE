@@ -46,12 +46,14 @@ export class SocketService {
 
     this.socket.on('message:receive', (message: Message) => {
       console.log('📨 Message received:', message._id);
-      this.newMessage.set(message);
+      this.newMessage.set(null); // Reset first
+      setTimeout(() => this.newMessage.set(message), 0); // Trigger effect
     });
 
     this.socket.on('message:sent', (message: Message) => {
       console.log('✅ Message sent:', message._id);
-      this.newMessage.set(message);
+      this.newMessage.set(null); // Reset first
+      setTimeout(() => this.newMessage.set(message), 0); // Trigger effect
     });
 
     // Receive full list of online users on connect
@@ -112,7 +114,8 @@ export class SocketService {
         )
       );
       // Trigger reaction update signal for chat component to sync
-      this.reactionUpdates.set({ messageId: data.messageId, reactions: data.reactions });
+      this.reactionUpdates.set(null);
+      setTimeout(() => this.reactionUpdates.set({ messageId: data.messageId, reactions: data.reactions }), 0);
     });
 
     this.socket.on('reaction:error', (data: { message: string }) => {
@@ -130,7 +133,8 @@ export class SocketService {
             : msg
         )
       );
-      this.messageEdited.set(data);
+      this.messageEdited.set(null);
+      setTimeout(() => this.messageEdited.set(data), 0);
     });
 
     this.socket.on('message:deleted', (data: { messageId: string; deleteType: 'me' | 'everyone' }) => {
@@ -144,7 +148,8 @@ export class SocketService {
           )
         );
       }
-      this.messageDeleted.set(data);
+      this.messageDeleted.set(null);
+      setTimeout(() => this.messageDeleted.set(data), 0);
     });
 
     // ============= PHASE 2: GROUP CHAT HANDLERS =============
