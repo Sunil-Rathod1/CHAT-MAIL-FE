@@ -21,65 +21,58 @@ import { CommonModule } from '@angular/common';
   `,
   styles: [`
     .emoji-picker {
-      position: absolute;
-      bottom: 100%;
-      left: 0;
+      position: relative;
       background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      padding: 0.5rem;
+      border-radius: 24px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      padding: 6px 8px;
       opacity: 0;
       visibility: hidden;
-      transform: translateY(10px);
-      transition: all 0.2s ease;
+      transform: translateY(4px);
+      transition: all 0.15s ease;
       z-index: 1000;
     }
 
     .emoji-picker.show {
       opacity: 1;
       visibility: visible;
-      transform: translateY(-5px);
+      transform: translateY(0);
     }
 
     .emoji-list {
       display: flex;
-      gap: 0.25rem;
+      gap: 2px;
       align-items: center;
     }
 
     .emoji-button {
       background: none;
       border: none;
-      font-size: 1.5rem;
+      font-size: 1.25rem;
       cursor: pointer;
-      padding: 0.25rem 0.5rem;
+      padding: 4px 6px;
       border-radius: 8px;
-      transition: all 0.2s;
+      transition: all 0.15s;
       line-height: 1;
     }
 
     .emoji-button:hover {
-      background-color: #f0f0f0;
-      transform: scale(1.2);
+      background-color: #f0f2f5;
+      transform: scale(1.15);
     }
 
     .emoji-button:active {
-      transform: scale(1.1);
+      transform: scale(1.05);
     }
 
     @media (max-width: 768px) {
       .emoji-picker {
-        left: 50%;
-        transform: translateX(-50%) translateY(10px);
-      }
-
-      .emoji-picker.show {
-        transform: translateX(-50%) translateY(-5px);
+        padding: 4px 6px;
       }
 
       .emoji-button {
-        font-size: 1.75rem;
-        padding: 0.5rem 0.75rem;
+        font-size: 1.1rem;
+        padding: 3px 5px;
       }
     }
   `]

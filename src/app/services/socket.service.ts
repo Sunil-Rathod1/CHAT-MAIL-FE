@@ -11,15 +11,16 @@ import { environment } from '../../environments/environment';
 export class SocketService {
   private authService = inject(AuthService);
   private socket: Socket | null = null;
-  
+
   isConnected = signal<boolean>(false);
   messages = signal<Message[]>([]);
+  newMessage = signal<Message | null>(null);  // Signal for real-time new messages
   onlineUsers = signal<string[]>([]);
   typingUsers = signal<Map<string, boolean>>(new Map());
   reactionUpdates = signal<{ messageId: string; reactions: any[] } | null>(null);
-  
+
   // Phase 2 signals
-  messageEdited = signal<{ messageId: string; newContent: string; editedAt: Date } | null>(null);
+  messageEdited = signal<{ messageId: string; content: string; isEdited: boolean; editedAt: Date } | null>(null);
   messageDeleted = signal<{ messageId: string; deleteType: 'me' | 'everyone' } | null>(null);
   groupMessages = signal<Message[]>([]);
   groupTypingUsers = signal<Map<string, Set<string>>>(new Map()); // groupId -> Set of userIds
@@ -44,11 +45,13 @@ export class SocketService {
     });
 
     this.socket.on('message:receive', (message: Message) => {
-      this.messages.update(msgs => [...msgs, message]);
+      console.log('📨 Message received:', message._id);
+      this.newMessage.set(message);
     });
 
     this.socket.on('message:sent', (message: Message) => {
-      this.messages.update(msgs => [...msgs, message]);
+      console.log('✅ Message sent:', message._id);
+      this.newMessage.set(message);
     });
 
     // Receive full list of online users on connect
@@ -86,8 +89,8 @@ export class SocketService {
 
     this.socket.on('message:status', (data: { messageId: string; status: string }) => {
       console.log('📬 Message status update:', data);
-      this.messages.update(msgs => 
-        msgs.map(msg => 
+      this.messages.update(msgs =>
+        msgs.map(msg =>
           msg._id === data.messageId ? { ...msg, status: data.status as any } : msg
         )
       );
@@ -117,13 +120,13 @@ export class SocketService {
     });
 
     // ============= PHASE 2: EDIT/DELETE HANDLERS =============
-    
-    this.socket.on('message:edited', (data: { messageId: string; newContent: string; editedAt: Date }) => {
+
+    this.socket.on('message:edited', (data: { messageId: string; content: string; isEdited: boolean; editedAt: Date }) => {
       console.log('✏️ Message edited:', data);
       this.messages.update(msgs =>
         msgs.map(msg =>
-          msg._id === data.messageId 
-            ? { ...msg, content: data.newContent, isEdited: true, editedAt: data.editedAt }
+          msg._id === data.messageId
+            ? { ...msg, content: data.content, isEdited: true, editedAt: data.editedAt }
             : msg
         )
       );
@@ -210,19 +213,19 @@ export class SocketService {
       this.groupTypingUsers.update(map => {
         const newMap = new Map(map);
         const typingSet = newMap.get(data.groupId) || new Set();
-        
+
         if (data.isTyping) {
           typingSet.add(data.userId);
         } else {
           typingSet.delete(data.userId);
         }
-        
+
         if (typingSet.size > 0) {
           newMap.set(data.groupId, typingSet);
         } else {
           newMap.delete(data.groupId);
         }
-        
+
         return newMap;
       });
     });
@@ -240,9 +243,13 @@ export class SocketService {
     }
   }
 
-  sendMessage(receiverId: string, content: string, type: string = 'text'): void {
+  getSocket(): any {
+    return this.socket;
+  }
+
+  sendMessage(receiverId: string, content: string, type: string = 'text', replyTo?: any): void {
     if (this.socket) {
-      this.socket.emit('message:send', { receiverId, content, type });
+      this.socket.emit('message:send', { receiverId, content, type, replyTo });
     }
   }
 

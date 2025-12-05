@@ -72,7 +72,7 @@ export interface ChatHistory {
 
 export interface EditMessageData {
   messageId: string;
-  newContent: string;
+  content: string;
 }
 
 export interface DeleteMessageData {

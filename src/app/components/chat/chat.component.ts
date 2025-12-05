@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed, effect, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed, effect, ViewChild, ElementRef, AfterViewChecked, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../services/auth.service';
@@ -7,13 +7,15 @@ import { SocketService } from '../../services/socket.service';
 import { UserService } from '../../services/user.service';
 import { AudioService } from '../../services/audio.service';
 import { NotificationService } from '../../services/notification.service';
+import { CallService } from '../../services/call.service';
 import { EmojiPickerComponent } from '../emoji-picker/emoji-picker.component';
+import { VideoCallComponent } from '../video-call/video-call.component';
 import { User } from '../../models/user.model';
 import { Message } from '../../models/message.model';
 
 @Component({
   selector: 'app-chat',
-  imports: [CommonModule, FormsModule, EmojiPickerComponent],
+  imports: [CommonModule, FormsModule, EmojiPickerComponent, VideoCallComponent],
   template: `
     <div class="chat-container">
       <!-- Sidebar -->
@@ -115,6 +117,21 @@ import { Message } from '../../models/message.model';
                 }
               </div>
             </div>
+            
+            <!-- Call Buttons -->
+            <div class="call-buttons">
+              <button class="btn-icon call-btn" (click)="startAudioCall()" title="Audio Call">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+              </button>
+              <button class="btn-icon call-btn" (click)="startVideoCall()" title="Video Call">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="23 7 16 12 23 17 23 7"/>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <!-- Messages Area -->
@@ -194,67 +211,70 @@ import { Message } from '../../models/message.model';
                       </div>
                     }
                     
-                    <!-- Message Actions -->
+                    <!-- Message Actions - WhatsApp Style -->
                     @if (!message.deletedForEveryone) {
-                      <div class="message-actions">
+                      <div class="message-menu-container">
                         <button 
-                          class="btn-action" 
-                          (click)="startReply(message)"
-                          title="Reply"
+                          class="menu-trigger"
+                          (click)="toggleMessageMenu(message._id!)"
                         >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <polyline points="9 17 4 12 9 7"/>
-                            <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
                           </svg>
                         </button>
                         
-                        @if (canEditMessage(message)) {
-                          <button 
-                            class="btn-action" 
-                            (click)="startEdit(message)"
-                            title="Edit"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                          </button>
+                        @if (activeMessageMenu() === message._id) {
+                          <div class="message-dropdown">
+                            <button class="dropdown-item" (click)="startReply(message); closeMessageMenu()">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="9 17 4 12 9 7"/>
+                                <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
+                              </svg>
+                              Reply
+                            </button>
+                            
+                            <button class="dropdown-item" (click)="toggleEmojiPicker(message._id!); closeMessageMenu()">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                                <line x1="15" y1="9" x2="15.01" y2="9"/>
+                              </svg>
+                              React
+                            </button>
+                            
+                            @if (canEditMessage(message)) {
+                              <button class="dropdown-item" (click)="startEdit(message); closeMessageMenu()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                                Edit
+                              </button>
+                            }
+                            
+                            @if (canDeleteMessage(message)) {
+                              <button class="dropdown-item delete" (click)="confirmDelete(message); closeMessageMenu()">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                  <polyline points="3 6 5 6 21 6"/>
+                                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                                Delete
+                              </button>
+                            }
+                          </div>
                         }
-                        
-                        @if (canDeleteMessage(message)) {
-                          <button 
-                            class="btn-action" 
-                            (click)="confirmDelete(message)"
-                            title="Delete"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                              <polyline points="3 6 5 6 21 6"/>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
-                        }
-                        
-                        <button 
-                          class="btn-action" 
-                          (click)="toggleEmojiPicker(message._id!)"
-                          title="React"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
-                            <line x1="9" y1="9" x2="9.01" y2="9"/>
-                            <line x1="15" y1="9" x2="15.01" y2="9"/>
-                          </svg>
-                        </button>
-                        
-                        <!-- Emoji Picker -->
-                        @if (showEmojiPicker() === message._id) {
+                      </div>
+                      
+                      <!-- Emoji Picker (positioned separately) -->
+                      @if (showEmojiPicker() === message._id) {
+                        <div class="emoji-picker-container">
                           <app-emoji-picker
                             [isOpen]="true"
                             (emojiSelected)="onEmojiSelect(message._id!, $event)"
                           />
-                        }
-                      </div>
+                        </div>
+                      }
                     }
                   }
                 </div>
@@ -323,13 +343,14 @@ import { Message } from '../../models/message.model';
                 (input)="onTyping()"
                 (keyup.enter)="sendMessage()"
                 placeholder="Type a message..."
-              class="message-input"
-            />
-            <button class="btn-send" (click)="sendMessage()" [disabled]="!messageInput.trim()">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-              </svg>
-            </button>
+                class="message-input"
+              />
+              <button class="btn-send" (click)="sendMessage()" [disabled]="!messageInput.trim()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              </button>
+            </div>
           </div>
         } @else {
           <div class="empty-chat">
@@ -353,6 +374,43 @@ import { Message } from '../../models/message.model';
           </div>
         </div>
       }
+      
+      <!-- Video Call Overlay -->
+      @if (callService.callState().isInCall) {
+        <app-video-call />
+      }
+      
+      <!-- Incoming Call Notification (shown when not in call) -->
+      @if (callService.incomingCall() && !callService.callState().isInCall) {
+        <div class="incoming-call-overlay">
+          <div class="incoming-call-modal">
+            <div class="caller-avatar">
+              @if (callService.incomingCall()!.caller.avatar) {
+                <img [src]="callService.incomingCall()!.caller.avatar" [alt]="callService.incomingCall()!.caller.name" />
+              } @else {
+                <div class="avatar-placeholder">{{ callService.incomingCall()!.caller.name.charAt(0) || '?' }}</div>
+              }
+            </div>
+            <h3>{{ callService.incomingCall()!.caller.name }}</h3>
+            <p>Incoming {{ callService.incomingCall()!.callType }} call...</p>
+            <div class="call-actions">
+              <button class="btn-accept" (click)="acceptIncomingCall()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                </svg>
+                Accept
+              </button>
+              <button class="btn-reject" (click)="rejectIncomingCall()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+                Decline
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styleUrl: './chat.component.css'
@@ -361,6 +419,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   authService = inject(AuthService);
   chatService = inject(ChatService);
   socketService = inject(SocketService);
+  callService = inject(CallService);
   private userService = inject(UserService);
   private audioService = inject(AudioService);
   private notificationService = inject(NotificationService);
@@ -372,7 +431,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   currentUser = this.authService.currentUser;
   searchQuery = '';
   messageInput = '';
-  
+
   selectedUser = signal<User | null>(null);
   searchResults = signal<User[]>([]);
   conversations = signal<any[]>([]);
@@ -381,7 +440,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   typingUsers = signal<Set<string>>(new Set());
   onlineUserIds = signal<Set<string>>(new Set());
   showEmojiPicker = signal<string | null>(null); // messageId or null
-  
+  activeMessageMenu = signal<string | null>(null); // messageId for dropdown menu
+
   // Phase 2 features
   replyingTo = signal<Message | null>(null);
   editingMessage = signal<Message | null>(null);
@@ -392,30 +452,34 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   selectedFile = signal<File | null>(null);
 
   constructor() {
-    // Listen to socket messages
+    // Listen to new real-time messages
     effect(() => {
-      const messages = this.socketService.messages();
+      const newMsg = this.socketService.newMessage();
       const selected = this.selectedUser();
-      
-      if (selected && messages.length > 0) {
-        const lastMsg = messages[messages.length - 1];
+
+      if (newMsg && selected) {
         const selectedId = (selected as any)._id || selected.id;
-        const senderId = (lastMsg.sender as any)?._id || (lastMsg.sender as any)?.id || lastMsg.sender;
-        const receiverId = (lastMsg.receiver as any)?._id || (lastMsg.receiver as any)?.id || lastMsg.receiver;
+        const senderId = (newMsg.sender as any)?._id || (newMsg.sender as any)?.id || newMsg.sender;
+        const receiverId = (newMsg.receiver as any)?._id || (newMsg.receiver as any)?.id || newMsg.receiver;
         const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
-        
+
+        // Check if message belongs to current conversation
         if (senderId === selectedId || receiverId === selectedId) {
-          this.chatMessages.update(msgs => [...msgs, lastMsg]);
+          // Prevent adding duplicate messages
+          this.chatMessages.update(msgs => {
+            if (msgs.some(m => m._id === newMsg._id)) return msgs;
+            return [...msgs, newMsg];
+          });
           this.shouldScrollToBottom = true;
-          
+
           // Play sound and show notification for received messages
           if (senderId === selectedId && receiverId === currentUserId) {
             this.audioService.playReceive();
-            
+
             // Show notification if not focused on chat
-            const senderName = (lastMsg.sender as any)?.name || (lastMsg.sender as any)?.email;
-            const senderAvatar = (lastMsg.sender as any)?.avatar;
-            this.notificationService.showMessageNotification(senderName, lastMsg.content, senderAvatar);
+            const senderName = (newMsg.sender as any)?.name || (newMsg.sender as any)?.email;
+            const senderAvatar = (newMsg.sender as any)?.avatar;
+            this.notificationService.showMessageNotification(senderName, newMsg.content, senderAvatar);
           }
         }
       }
@@ -440,7 +504,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Listen to message status updates from socket
     effect(() => {
       const socketMessages = this.socketService.messages();
-      
+
       // Update status and reactions of existing messages
       if (socketMessages.length > 0) {
         socketMessages.forEach(socketMsg => {
@@ -448,8 +512,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
             msgs.map(msg => {
               if (msg._id === socketMsg._id) {
                 // Update both status and reactions
-                return { 
-                  ...msg, 
+                return {
+                  ...msg,
                   status: socketMsg.status,
                   reactions: socketMsg.reactions || msg.reactions
                 };
@@ -464,12 +528,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Listen to reaction updates specifically (real-time sync)
     effect(() => {
       const reactionUpdate = this.socketService.reactionUpdates();
-      
+
       if (reactionUpdate) {
         console.log('🔄 Syncing reaction to chatMessages:', reactionUpdate);
         this.chatMessages.update(msgs =>
           msgs.map(msg =>
-            msg._id === reactionUpdate.messageId 
+            msg._id === reactionUpdate.messageId
               ? { ...msg, reactions: reactionUpdate.reactions }
               : msg
           )
@@ -485,7 +549,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         this.chatMessages.update(msgs =>
           msgs.map(msg =>
             msg._id === editUpdate.messageId
-              ? { ...msg, content: editUpdate.newContent, isEdited: true, editedAt: editUpdate.editedAt }
+              ? { ...msg, content: editUpdate.content, isEdited: true, editedAt: editUpdate.editedAt }
               : msg
           )
         );
@@ -584,7 +648,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     if (userId) {
       this.loadChatHistory(userId);
       this.shouldScrollToBottom = true;
-      
+
       // Mark messages as read
       this.markMessagesAsRead(userId);
     }
@@ -607,10 +671,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const sender = conv.lastMessage.sender;
     const receiver = conv.lastMessage.receiver;
     const senderId = sender?._id || sender?.id;
-    
+
     // Select the other user (not the current user)
     const otherUser = senderId === currentUserId ? receiver : sender;
-    
+
     if (otherUser) {
       this.selectChat(otherUser);
     }
@@ -619,18 +683,18 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   isActiveConversation(conv: any): boolean {
     const selected = this.selectedUser();
     if (!selected) return false;
-    
+
     const selectedId = (selected as any)._id || selected.id;
     const currentUser = this.currentUser();
     const currentUserId = (currentUser as any)?._id || currentUser?.id;
     const sender = conv.lastMessage.sender;
     const receiver = conv.lastMessage.receiver;
     const senderId = sender?._id || sender?.id;
-    
-    const otherUserId = senderId === currentUserId 
+
+    const otherUserId = senderId === currentUserId
       ? (receiver?._id || receiver?.id)
       : (sender?._id || sender?.id);
-    
+
     return selectedId === otherUserId;
   }
 
@@ -639,7 +703,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       console.error('Cannot load chat history: userId is undefined');
       return;
     }
-    
+
     this.chatService.getChatHistory(userId).subscribe({
       next: (response) => {
         if (response.success) {
@@ -654,7 +718,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   markMessagesAsRead(senderId: string): void {
     // Mark via socket for real-time update
     this.socketService.markAllAsRead(senderId);
-    
+
     // Also mark via HTTP API
     this.chatService.markAsRead(senderId).subscribe({
       next: () => {
@@ -680,7 +744,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const content = this.messageInput.trim();
     const selected = this.selectedUser()!;
     const receiverId = (selected as any)._id || selected.id;
-    
+
     if (!receiverId) {
       console.error('Cannot send message: receiver ID is undefined');
       return;
@@ -693,12 +757,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       sender: this.replyingTo()!.sender
     } : undefined;
 
-    this.socketService.sendMessage(receiverId, content, 'text');
+    this.socketService.sendMessage(receiverId, content, 'text', replyTo);
     this.audioService.playSend();
     this.messageInput = '';
     this.replyingTo.set(null);
     this.shouldScrollToBottom = true;
-    
+
     // Stop typing indicator
     this.socketService.stopTyping(receiverId);
   }
@@ -751,7 +815,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const sender = conv.lastMessage.sender;
     const receiver = conv.lastMessage.receiver;
     const senderId = sender?._id || sender?.id;
-    
+
     return senderId === currentUserId
       ? receiver?.name || receiver?.email
       : sender?.name || sender?.email;
@@ -763,7 +827,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const sender = conv.lastMessage.sender;
     const receiver = conv.lastMessage.receiver;
     const senderId = sender?._id || sender?.id;
-    
+
     return senderId === currentUserId
       ? receiver?.avatar
       : sender?.avatar;
@@ -772,6 +836,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   formatTime(date: Date): string {
     const d = new Date(date);
     return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  toggleMessageMenu(messageId: string): void {
+    this.activeMessageMenu.set(this.activeMessageMenu() === messageId ? null : messageId);
+    this.showEmojiPicker.set(null); // Close emoji picker when opening menu
+  }
+
+  closeMessageMenu(): void {
+    this.activeMessageMenu.set(null);
   }
 
   toggleEmojiPicker(messageId: string): void {
@@ -787,9 +860,19 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     this.socketService.reactToMessage(messageId, emoji);
   }
 
+  // Close menus when clicking outside
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event): void {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.message-menu-container') && !target.closest('.emoji-picker-container')) {
+      this.activeMessageMenu.set(null);
+      this.showEmojiPicker.set(null);
+    }
+  }
+
   groupReactions(reactions: any[]): { emoji: string; count: number; users: any[] }[] {
     const grouped = new Map<string, { emoji: string; count: number; users: any[] }>();
-    
+
     reactions.forEach(reaction => {
       const existing = grouped.get(reaction.emoji);
       if (existing) {
@@ -803,7 +886,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         });
       }
     });
-    
+
     return Array.from(grouped.values());
   }
 
@@ -841,13 +924,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Can only edit own messages within 15 minutes
     const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
     const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
-    
+
     if (senderId !== currentUserId) return;
-    
+
     const messageTime = new Date(message.createdAt).getTime();
     const now = Date.now();
     const fifteenMinutes = 15 * 60 * 1000;
-    
+
     if (now - messageTime > fifteenMinutes) {
       alert('Messages can only be edited within 15 minutes');
       return;
@@ -864,7 +947,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
     this.socketService.editMessage({
       messageId: message._id!,
-      newContent: this.editContent.trim()
+      content: this.editContent.trim()
     });
 
     this.editingMessage.set(null);
@@ -891,7 +974,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       const messageTime = new Date(message.createdAt).getTime();
       const now = Date.now();
       const oneHour = 60 * 60 * 1000;
-      
+
       if (now - messageTime > oneHour) {
         alert('Messages can only be deleted for everyone within 1 hour');
         this.showDeleteDialog.set(null);
@@ -952,9 +1035,18 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
           const selected = this.selectedUser();
           if (selected) {
             const receiverId = (selected as any)._id || selected.id;
-            this.socketService.sendMessage(receiverId, response.data.url, 'image');
+
+            // Build replyTo data if replying
+            const replyTo = this.replyingTo() ? {
+              messageId: this.replyingTo()!._id!,
+              content: this.replyingTo()!.content,
+              sender: this.replyingTo()!.sender
+            } : undefined;
+
+            this.socketService.sendMessage(receiverId, response.data.url, 'image', replyTo);
+            this.replyingTo.set(null);
           }
-          
+
           this.cancelImageUpload();
         }
       },
@@ -978,20 +1070,65 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   canEditMessage(message: Message): boolean {
     const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
     const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
-    
+
     if (senderId !== currentUserId) return false;
-    
+
     const messageTime = new Date(message.createdAt).getTime();
     const now = Date.now();
     const fifteenMinutes = 15 * 60 * 1000;
-    
+
     return (now - messageTime) <= fifteenMinutes;
   }
 
   canDeleteMessage(message: Message): boolean {
     const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
     const senderId = (message.sender as any)?._id || (message.sender as any)?.id || message.sender;
-    
+
     return senderId === currentUserId;
+  }
+
+  // Video Call Methods
+  startVideoCall(): void {
+    const user = this.selectedUser();
+    if (!user) return;
+    
+    const userId = (user as any)._id || user.id;
+    const receiverInfo = {
+      id: userId,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar
+    };
+    
+    this.callService.initiateCall(userId, receiverInfo, 'video');
+  }
+
+  startAudioCall(): void {
+    const user = this.selectedUser();
+    if (!user) return;
+    
+    const userId = (user as any)._id || user.id;
+    const receiverInfo = {
+      id: userId,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar
+    };
+    
+    this.callService.initiateCall(userId, receiverInfo, 'audio');
+  }
+
+  acceptIncomingCall(): void {
+    const incoming = this.callService.incomingCall();
+    if (incoming) {
+      this.callService.acceptCall(incoming.callId, incoming.caller, incoming.callType);
+    }
+  }
+
+  rejectIncomingCall(): void {
+    const incoming = this.callService.incomingCall();
+    if (incoming) {
+      this.callService.rejectCall(incoming.callId);
+    }
   }
 }
