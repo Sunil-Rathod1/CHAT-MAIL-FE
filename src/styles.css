@@ -9,11 +9,43 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 html, body {
   height: 100%;
   width: 100%;
+}
+
+/* Prevent pull-to-refresh and bounce on mobile */
+html {
+  overscroll-behavior: none;
+}
+
+/* Smooth scrolling */
+* {
+  scroll-behavior: smooth;
+}
+
+/* Tap highlight color for mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Input appearance reset for mobile */
+input, textarea, select, button {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  font-family: inherit;
+}
+
+/* Prevent zoom on input focus on iOS */
+@media (max-width: 767px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
 }
 
 /* Scrollbar styling */
@@ -33,5 +65,29 @@ html, body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Hide scrollbar on mobile but keep functionality */
+@media (max-width: 767px) {
+  ::-webkit-scrollbar {
+    width: 3px;
+  }
+  
+  .contacts-list,
+  .messages-area {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  .input-area {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  
+  .chat-header,
+  .sidebar-header {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
 }
 

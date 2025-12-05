@@ -502,22 +502,179 @@ import { CallService } from '../../services/call.service';
       transform: scale(1.1);
     }
 
-    @media (max-width: 768px) {
+    /* Tablet */
+    @media (max-width: 991px) and (min-width: 768px) {
       .local-video-container {
-        width: 100px;
-        height: 140px;
-        bottom: 120px;
-        right: 16px;
+        width: 140px;
+        height: 180px;
+        bottom: 100px;
+        right: 20px;
+      }
+
+      .call-controls {
+        padding: 16px 0;
+        gap: 16px;
       }
 
       .control-btn {
+        width: 52px;
+        height: 52px;
+      }
+
+      .control-btn.end-call {
+        width: 60px;
+        height: 60px;
+      }
+
+      .avatar {
+        width: 100px;
+        height: 100px;
+      }
+
+      .status-content h2 {
+        font-size: 22px;
+      }
+    }
+
+    /* Mobile */
+    @media (max-width: 767px) {
+      .local-video-container {
+        width: 100px;
+        height: 140px;
+        bottom: 110px;
+        right: 12px;
+        border-radius: 12px;
+      }
+
+      .call-controls {
+        padding: 12px 0 20px;
+        gap: 12px;
+      }
+
+      .control-btn {
+        width: 48px;
+        height: 48px;
+      }
+
+      .control-btn svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      .control-btn.end-call {
+        width: 54px;
+        height: 54px;
+      }
+
+      .call-info-bar {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+        padding: 10px 16px;
+        font-size: 13px;
+      }
+
+      .avatar {
+        width: 90px;
+        height: 90px;
+      }
+
+      .avatar-placeholder {
+        font-size: 36px;
+      }
+
+      .status-content h2 {
+        font-size: 20px;
+        margin-bottom: 6px;
+      }
+
+      .status-text {
+        font-size: 14px;
+      }
+
+      .avatar-large {
+        width: 100px;
+        height: 100px;
+      }
+
+      .avatar-placeholder-large {
+        font-size: 40px;
+      }
+
+      .remote-video-disabled p {
+        font-size: 14px;
+      }
+
+      .local-video-off svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
+    /* Small Mobile */
+    @media (max-width: 375px) {
+      .local-video-container {
+        width: 80px;
+        height: 110px;
+        bottom: 100px;
+        right: 10px;
+        border-radius: 10px;
+      }
+
+      .call-controls {
+        gap: 10px;
+      }
+
+      .control-btn {
+        width: 44px;
+        height: 44px;
+      }
+
+      .control-btn.end-call {
         width: 50px;
         height: 50px;
       }
 
+      .call-info-bar {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+
+      .avatar {
+        width: 80px;
+        height: 80px;
+      }
+
+      .status-content h2 {
+        font-size: 18px;
+      }
+    }
+
+    /* Landscape orientation */
+    @media (max-width: 767px) and (orientation: landscape) {
+      .local-video-container {
+        width: 120px;
+        height: 90px;
+        bottom: 80px;
+        right: 12px;
+      }
+
+      .call-controls {
+        padding: 8px 0;
+      }
+
+      .control-btn {
+        width: 44px;
+        height: 44px;
+      }
+
       .control-btn.end-call {
-        width: 56px;
-        height: 56px;
+        width: 50px;
+        height: 50px;
+      }
+
+      .call-status-overlay .status-content {
+        transform: scale(0.85);
       }
     }
   `]
