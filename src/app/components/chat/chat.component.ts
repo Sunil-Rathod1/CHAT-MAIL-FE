@@ -1229,8 +1229,23 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       },
       error: (error) => {
         console.error('Upload error:', error);
-        alert('Failed to upload file. Please try again.');
+        let errorMessage = 'Failed to upload file. ';
+        
+        if (error.status === 500) {
+          errorMessage += 'Server error - please contact support or try again later.';
+        } else if (error.status === 413) {
+          errorMessage += 'File is too large. Maximum size: 10MB for images.';
+        } else if (error.status === 400) {
+          errorMessage += error.error?.message || 'Invalid file format.';
+        } else if (error.status === 0) {
+          errorMessage += 'Network error - please check your connection.';
+        } else {
+          errorMessage += error.error?.message || 'Please try again.';
+        }
+        
+        alert(errorMessage);
         this.uploadingImage.set(false);
+        this.uploadProgress.set(0);
       }
     });
   }
