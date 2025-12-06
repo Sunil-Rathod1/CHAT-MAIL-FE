@@ -306,12 +306,12 @@ import { Message } from '../../models/message.model';
               </div>
             }
             
-            <!-- Image Preview -->
-            @if (imagePreview()) {
+            <!-- Image Preview (Old - kept for backwards compat) -->
+            @if (imagePreview() && !showMediaPreview()) {
               <div class="image-upload-preview">
                 <img [src]="imagePreview()" alt="Preview" />
                 <div class="preview-actions">
-                  <button class="btn-sm" (click)="uploadImage()" [disabled]="uploadingImage()">
+                  <button class="btn-sm" (click)="sendMediaFile()" [disabled]="uploadingImage()">
                     {{ uploadingImage() ? 'Uploading...' : 'Send Image' }}
                   </button>
                   <button class="btn-sm btn-secondary" (click)="cancelImageUpload()" [disabled]="uploadingImage()">
@@ -322,18 +322,19 @@ import { Message } from '../../models/message.model';
             }
             
             <div class="input-controls">
+              <!-- File Upload Inputs -->
               <input 
                 type="file" 
-                accept="image/*" 
+                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" 
                 (change)="onFileSelected($event)"
                 #fileInput
                 style="display: none;"
               />
-              <button class="btn-icon" (click)="fileInput.click()" title="Send image">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
+              
+              <!-- Attachment Menu Button -->
+              <button class="btn-icon" (click)="fileInput.click()" title="Attach file">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
                 </svg>
               </button>
               
@@ -353,12 +354,72 @@ import { Message } from '../../models/message.model';
             </div>
           </div>
         } @else {
+          <!-- Empty State -->
           <div class="empty-chat">
-            <h2>Welcome to ChatMail</h2>
-            <p>Select a conversation or search for users to start chatting</p>
+            <h2>ChatMail</h2>
+            <p>Select a conversation to start messaging</p>
           </div>
         }
       </div>
+
+    <!-- WhatsApp-Style Media Preview Modal -->
+    @if (showMediaPreview()) {
+      <div class="media-preview-overlay" (click)="cancelMediaPreview()">
+        <div class="media-preview-modal" (click)="$event.stopPropagation()">
+          <div class="media-preview-header">
+            <button class="btn-close-modal" (click)="cancelMediaPreview()">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <h3>{{ fileType() === 'image' ? 'Send Image' : fileType() === 'video' ? 'Send Video' : 'Send Document' }}</h3>
+          </div>
+          
+          <div class="media-preview-content">
+            @if (fileType() === 'image' && imagePreview()) {
+              <img [src]="imagePreview()" alt="Preview" class="preview-media" />
+            } @else if (fileType() === 'video' && imagePreview()) {
+              <video [src]="imagePreview()" controls class="preview-media"></video>
+            } @else {
+              <div class="document-preview">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="12" y1="18" x2="12" y2="12"/>
+                  <line x1="9" y1="15" x2="15" y2="15"/>
+                </svg>
+                <p>{{ selectedFile()?.name }}</p>
+                <small>{{ (selectedFile()?.size || 0) / 1024 | number:'1.0-0' }} KB</small>
+              </div>
+            }
+          </div>
+          
+          <div class="media-preview-footer">
+            <input 
+              type="text" 
+              [(ngModel)]="mediaCaption"
+              placeholder="Add a caption..."
+              class="caption-input"
+              [disabled]="uploadingImage()"
+            />
+            <button 
+              class="btn-send-media" 
+              (click)="sendMediaFile()" 
+              [disabled]="uploadingImage()"
+            >
+              @if (uploadingImage()) {
+                <span>{{ uploadProgress() }}%</span>
+              } @else {
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
+      </div>
+    }
       
       <!-- Delete Confirmation Dialog -->
       @if (showDeleteDialog()) {
@@ -462,11 +523,16 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   uploadingImage = signal<boolean>(false);
   imagePreview = signal<string | null>(null);
   selectedFile = signal<File | null>(null);
+  fileType = signal<'image' | 'video' | 'document' | null>(null);
+  uploadProgress = signal<number>(0);
+  showMediaPreview = signal<boolean>(false);
+  mediaCaption = '';
 
   constructor() {
     // Listen to new real-time messages
     effect(() => {
-      const newMsg = this.socketService.newMessage();
+      const newMsgData = this.socketService.newMessage();
+      const newMsg = newMsgData.message;
       const selected = this.selectedUser();
 
       if (newMsg && selected) {
@@ -475,11 +541,25 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         const receiverId = (newMsg.receiver as any)?._id || (newMsg.receiver as any)?.id || newMsg.receiver;
         const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
 
+        console.log('🔔 New message effect triggered:', {
+          messageId: newMsg._id,
+          content: newMsg.content,
+          timestamp: newMsgData.timestamp,
+          senderId,
+          receiverId,
+          selectedId,
+          currentUserId
+        });
+
         // Check if message belongs to current conversation
         if (senderId === selectedId || receiverId === selectedId) {
           // Prevent adding duplicate messages
           this.chatMessages.update(msgs => {
-            if (msgs.some(m => m._id === newMsg._id)) return msgs;
+            if (msgs.some(m => m._id === newMsg._id)) {
+              console.log('⚠️ Duplicate message detected, skipping');
+              return msgs;
+            }
+            console.log('✅ Adding message to chat');
             return [...msgs, newMsg];
           });
           this.shouldScrollToBottom = true;
@@ -496,13 +576,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         }
 
         // Update conversations list with new message
-        this.updateConversationWithMessage(newMsg);
+        if (newMsg) {
+          this.updateConversationWithMessage(newMsg);
+        }
+      } else {
+        // Even if not in current chat, update conversations
+        console.log('💬 Message not for current chat, updating conversations only');
+        if (newMsg) {
+          this.updateConversationWithMessage(newMsg);
+        }
       }
     });
 
     // Listen to online/offline status
     effect(() => {
       const onlineUsers = this.socketService.onlineUsers();
+      console.log('👥 Online users updated:', onlineUsers.length, 'users');
       this.onlineUserIds.set(new Set(onlineUsers));
     });
 
@@ -511,7 +600,10 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       const typingMap = this.socketService.typingUsers();
       const typingSet = new Set<string>();
       typingMap.forEach((isTyping, userId) => {
-        if (isTyping) typingSet.add(userId);
+        if (isTyping) {
+          console.log('⌨️ User typing:', userId);
+          typingSet.add(userId);
+        }
       });
       this.typingUsers.set(typingSet);
     });
@@ -568,6 +660,23 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
               : msg
           )
         );
+        
+        // Update conversation preview if this is the last message
+        this.conversations.update(convs =>
+          convs.map(conv => {
+            if (conv.lastMessage._id === editUpdate.messageId) {
+              return {
+                ...conv,
+                lastMessage: {
+                  ...conv.lastMessage,
+                  content: editUpdate.content,
+                  isEdited: true
+                }
+              };
+            }
+            return conv;
+          })
+        );
       }
     });
 
@@ -583,6 +692,23 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
                 ? { ...msg, deletedForEveryone: true, deletedAt: new Date(), content: 'This message was deleted' }
                 : msg
             )
+          );
+          
+          // Update conversation preview if this is the last message
+          this.conversations.update(convs =>
+            convs.map(conv => {
+              if (conv.lastMessage._id === deleteUpdate.messageId) {
+                return {
+                  ...conv,
+                  lastMessage: {
+                    ...conv.lastMessage,
+                    content: 'This message was deleted',
+                    deletedForEveryone: true
+                  }
+                };
+              }
+              return conv;
+            })
           );
         } else {
           // For 'me' deletions, filter out the message
@@ -615,6 +741,13 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   ngOnInit(): void {
     this.socketService.connect();
     this.loadConversations();
+    
+    // Refresh conversations every 30 seconds to stay in sync
+    setInterval(() => {
+      console.log('🔄 Auto-refreshing conversations...');
+      this.loadConversations();
+    }, 30000);
+    
     // Request notification permission
     this.notificationService.requestPermission();
     // Ensure call service listeners are initialized
@@ -768,6 +901,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       console.error('Cannot send message: receiver ID is undefined');
       return;
     }
+
+    console.log('📤 Sending message:', {
+      content,
+      receiverId,
+      receiverName: selected.name
+    });
 
     // Build replyTo data if replying
     const replyTo = this.replyingTo() ? {
@@ -1019,19 +1158,29 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Check file type
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
-      return;
+    // Determine file type
+    let type: 'image' | 'video' | 'document' = 'document';
+    if (file.type.startsWith('image/')) {
+      type = 'image';
+    } else if (file.type.startsWith('video/')) {
+      type = 'video';
     }
 
-    // Check file size (10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image size must be less than 10MB');
+    // Check file size (50MB for videos, 10MB for images, 20MB for documents)
+    const maxSize = type === 'video' ? 50 * 1024 * 1024 : 
+                    type === 'image' ? 10 * 1024 * 1024 : 
+                    20 * 1024 * 1024;
+    
+    if (file.size > maxSize) {
+      const sizeLimit = type === 'video' ? '50MB' : type === 'image' ? '10MB' : '20MB';
+      alert(`File size must be less than ${sizeLimit}`);
       return;
     }
 
     this.selectedFile.set(file);
+    this.fileType.set(type);
+    this.showMediaPreview.set(true);
+    this.mediaCaption = '';
 
     // Create preview
     const reader = new FileReader();
@@ -1039,6 +1188,61 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.imagePreview.set(e.target.result);
     };
     reader.readAsDataURL(file);
+    
+    // Reset file input
+    event.target.value = '';
+  }
+
+  sendMediaFile(): void {
+    const file = this.selectedFile();
+    const type = this.fileType();
+    if (!file || !type) return;
+
+    this.uploadingImage.set(true);
+    this.uploadProgress.set(0);
+
+    this.chatService.uploadImage(file).subscribe({
+      next: (response) => {
+        if (response.success && response.data) {
+          const selected = this.selectedUser();
+          if (selected) {
+            const receiverId = (selected as any)._id || selected.id;
+
+            // Build replyTo data if replying
+            const replyTo = this.replyingTo() ? {
+              messageId: this.replyingTo()!._id!,
+              content: this.replyingTo()!.content,
+              sender: this.replyingTo()!.sender
+            } : undefined;
+
+            // Send with caption if provided
+            const content = this.mediaCaption ? 
+              `${response.data.url}\n${this.mediaCaption}` : 
+              response.data.url;
+
+            this.socketService.sendMessage(receiverId, content, type, replyTo);
+            this.replyingTo.set(null);
+            this.audioService.playSend();
+          }
+        }
+        this.cancelMediaPreview();
+      },
+      error: (error) => {
+        console.error('Upload error:', error);
+        alert('Failed to upload file. Please try again.');
+        this.uploadingImage.set(false);
+      }
+    });
+  }
+
+  cancelMediaPreview(): void {
+    this.showMediaPreview.set(false);
+    this.selectedFile.set(null);
+    this.imagePreview.set(null);
+    this.fileType.set(null);
+    this.uploadingImage.set(false);
+    this.uploadProgress.set(0);
+    this.mediaCaption = '';
   }
 
   uploadImage(): void {
@@ -1081,9 +1285,7 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   }
 
   cancelImageUpload(): void {
-    this.selectedFile.set(null);
-    this.imagePreview.set(null);
-    this.uploadingImage.set(false);
+    this.cancelMediaPreview();
   }
 
   canEditMessage(message: Message): boolean {
@@ -1159,29 +1361,46 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Determine the other user in the conversation
     const otherUserId = senderId === currentUserId ? receiverId : senderId;
     
+    console.log('🔄 Updating conversation with message:', {
+      messageId: message._id,
+      content: message.content,
+      senderId,
+      receiverId,
+      otherUserId,
+      currentUserId
+    });
+    
     this.conversations.update(convs => {
+      console.log('📋 Current conversations:', convs.length);
+      
       // Check if conversation exists
       const existingIndex = convs.findIndex(conv => {
         const convSenderId = (conv.lastMessage.sender as any)?._id || (conv.lastMessage.sender as any)?.id;
         const convReceiverId = (conv.lastMessage.receiver as any)?._id || (conv.lastMessage.receiver as any)?.id;
-        return (convSenderId === otherUserId || convReceiverId === otherUserId);
+        const matches = (convSenderId === otherUserId || convReceiverId === otherUserId);
+        return matches;
       });
 
       if (existingIndex !== -1) {
+        console.log('✏️ Updating existing conversation at index:', existingIndex);
         // Update existing conversation
         const updated = [...convs];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          lastMessage: message
+          lastMessage: message,
+          updatedAt: message.createdAt
         };
         // Move to top
         const [movedConv] = updated.splice(existingIndex, 1);
         return [movedConv, ...updated];
       } else {
-        // Add new conversation
+        console.log('➕ Adding new conversation');
+        // Add new conversation - need to have full user objects
+        const otherUser = senderId === currentUserId ? message.receiver : message.sender;
         return [{
           _id: `conv_${message._id}`,
-          lastMessage: message
+          lastMessage: message,
+          updatedAt: message.createdAt
         }, ...convs];
       }
     });

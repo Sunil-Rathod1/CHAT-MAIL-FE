@@ -14,28 +14,50 @@ export class SocketService {
 
   isConnected = signal<boolean>(false);
   messages = signal<Message[]>([]);
-  newMessage = signal<Message | null>(null);  // Signal for real-time new messages
+  newMessage = signal<{ message: Message | null; timestamp: number }>({ message: null, timestamp: 0 });  // Signal for real-time new messages
   onlineUsers = signal<string[]>([]);
   typingUsers = signal<Map<string, boolean>>(new Map());
-  reactionUpdates = signal<{ messageId: string; reactions: any[] } | null>(null);
+  reactionUpdates = signal<{ messageId: string; reactions: any[]; timestamp: number } | null>(null);
 
   // Phase 2 signals
-  messageEdited = signal<{ messageId: string; content: string; isEdited: boolean; editedAt: Date } | null>(null);
-  messageDeleted = signal<{ messageId: string; deleteType: 'me' | 'everyone' } | null>(null);
+  messageEdited = signal<{ messageId: string; content: string; isEdited: boolean; editedAt: Date; timestamp: number } | null>(null);
+  messageDeleted = signal<{ messageId: string; deleteType: 'me' | 'everyone'; timestamp: number } | null>(null);
   groupMessages = signal<Message[]>([]);
   groupTypingUsers = signal<Map<string, Set<string>>>(new Map()); // groupId -> Set of userIds
   groupMemberUpdates = signal<{ groupId: string; action: string; data: any } | null>(null);
 
   connect(): void {
     const token = this.authService.getToken();
-    if (!token) return;
+    if (!token) {
+      console.error('❌ No token found, cannot connect to socket');
+      return;
+    }
 
+    // Prevent multiple connections
+    if (this.socket && this.socket.connected) {
+      console.log('⚠️ Socket already connected');
+      return;
+    }
+
+    console.log('🔌 Connecting to Socket.IO server...');
     this.socket = io(environment.socketUrl, {
-      auth: { token }
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
     });
 
     this.socket.on('connect', () => {
-      console.log('✅ Connected to Socket.IO server');
+      console.log('✅ Connected to Socket.IO server', this.socket?.id);
+      this.isConnected.set(true);
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('❌ Connection error:', error.message);
+    });
+
+    this.socket.on('reconnect', (attemptNumber) => {
+      console.log('🔄 Reconnected after', attemptNumber, 'attempts');
       this.isConnected.set(true);
     });
 
@@ -45,15 +67,13 @@ export class SocketService {
     });
 
     this.socket.on('message:receive', (message: Message) => {
-      console.log('📨 Message received:', message._id);
-      this.newMessage.set(null); // Reset first
-      setTimeout(() => this.newMessage.set(message), 0); // Trigger effect
+      console.log('📨 Message received:', message._id, message.content);
+      this.newMessage.set({ message, timestamp: Date.now() });
     });
 
     this.socket.on('message:sent', (message: Message) => {
-      console.log('✅ Message sent:', message._id);
-      this.newMessage.set(null); // Reset first
-      setTimeout(() => this.newMessage.set(message), 0); // Trigger effect
+      console.log('✅ Message sent:', message._id, message.content);
+      this.newMessage.set({ message, timestamp: Date.now() });
     });
 
     // Receive full list of online users on connect
@@ -114,8 +134,7 @@ export class SocketService {
         )
       );
       // Trigger reaction update signal for chat component to sync
-      this.reactionUpdates.set(null);
-      setTimeout(() => this.reactionUpdates.set({ messageId: data.messageId, reactions: data.reactions }), 0);
+      this.reactionUpdates.set({ messageId: data.messageId, reactions: data.reactions, timestamp: Date.now() });
     });
 
     this.socket.on('reaction:error', (data: { message: string }) => {
@@ -133,8 +152,7 @@ export class SocketService {
             : msg
         )
       );
-      this.messageEdited.set(null);
-      setTimeout(() => this.messageEdited.set(data), 0);
+      this.messageEdited.set({ ...data, timestamp: Date.now() });
     });
 
     this.socket.on('message:deleted', (data: { messageId: string; deleteType: 'me' | 'everyone' }) => {
@@ -148,8 +166,7 @@ export class SocketService {
           )
         );
       }
-      this.messageDeleted.set(null);
-      setTimeout(() => this.messageDeleted.set(data), 0);
+      this.messageDeleted.set({ ...data, timestamp: Date.now() });
     });
 
     // ============= PHASE 2: GROUP CHAT HANDLERS =============
