@@ -40,6 +40,8 @@ import { CallService } from '../../services/call.service';
           class="remote-video"
           autoplay 
           playsinline
+          [muted]="false"
+          [volume]="1.0"
           [class.hidden]="!callService.callState().remoteVideoEnabled"
         ></video>
 
@@ -702,7 +704,12 @@ export class VideoCallComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const stream = this.callService.remoteStreamSignal();
       if (stream && this.remoteVideoRef?.nativeElement) {
-        this.remoteVideoRef.nativeElement.srcObject = stream;
+        const videoElement = this.remoteVideoRef.nativeElement;
+        videoElement.srcObject = stream;
+        // Ensure audio is enabled and volume is set
+        videoElement.muted = false;
+        videoElement.volume = 1.0;
+        console.log('🔊 Remote stream attached, audio enabled');
       }
     });
 
@@ -726,7 +733,12 @@ export class VideoCallComponent implements AfterViewInit, OnDestroy {
       this.localVideoRef.nativeElement.srcObject = localStream;
     }
     if (remoteStream && this.remoteVideoRef?.nativeElement) {
-      this.remoteVideoRef.nativeElement.srcObject = remoteStream;
+      const remoteVideo = this.remoteVideoRef.nativeElement;
+      remoteVideo.srcObject = remoteStream;
+      // Explicitly enable audio
+      remoteVideo.muted = false;
+      remoteVideo.volume = 1.0;
+      console.log('🔊 Remote video initialized with audio enabled');
     }
   }
 

@@ -339,6 +339,13 @@ export class CallService {
     };
 
     this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+    
+    // Log captured tracks
+    const audioTracks = this.localStream.getAudioTracks();
+    const videoTracks = this.localStream.getVideoTracks();
+    console.log('🎤 Local audio tracks:', audioTracks.length, audioTracks.map(t => `${t.label} (enabled: ${t.enabled})`));
+    console.log('📹 Local video tracks:', videoTracks.length, videoTracks.map(t => `${t.label} (enabled: ${t.enabled})`));
+    
     this.localStreamSignal.set(this.localStream);
   }
 
@@ -355,8 +362,15 @@ export class CallService {
 
     // Handle incoming tracks
     pc.ontrack = (event) => {
-      console.log('📹 Remote track received');
+      console.log('📹 Remote track received:', event.track.kind, 'enabled:', event.track.enabled);
       this.remoteStream = event.streams[0];
+      
+      // Log all tracks in the stream
+      const audioTracks = this.remoteStream.getAudioTracks();
+      const videoTracks = this.remoteStream.getVideoTracks();
+      console.log('🎵 Audio tracks:', audioTracks.length, audioTracks.map(t => `${t.label} (enabled: ${t.enabled})`));
+      console.log('📹 Video tracks:', videoTracks.length, videoTracks.map(t => `${t.label} (enabled: ${t.enabled})`));
+      
       this.remoteStreamSignal.set(this.remoteStream);
       this.callState.update(state => ({ ...state, callStatus: 'connected' }));
     };
