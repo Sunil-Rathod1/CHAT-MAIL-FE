@@ -553,13 +553,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
 
         // Check if message belongs to current conversation
         if (senderId === selectedId || receiverId === selectedId) {
+          console.log('🎯 Message is for current chat - senderId:', senderId, 'receiverId:', receiverId, 'selectedId:', selectedId);
           // Prevent adding duplicate messages
           this.chatMessages.update(msgs => {
             if (msgs.some(m => m._id === newMsg._id)) {
               console.log('⚠️ Duplicate message detected, skipping');
               return msgs;
             }
-            console.log('✅ Adding message to chat');
+            console.log('✅ Adding new message to chat');
             return [...msgs, newMsg];
           });
           this.shouldScrollToBottom = true;
@@ -573,6 +574,8 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
             const senderAvatar = (newMsg.sender as any)?.avatar;
             this.notificationService.showMessageNotification(senderName, newMsg.content, senderAvatar);
           }
+        } else {
+          console.log('🚫 Message NOT for current chat - senderId:', senderId, 'receiverId:', receiverId, 'selectedId:', selectedId);
         }
 
         // Update conversations list with new message
@@ -591,8 +594,17 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     // Listen to online/offline status
     effect(() => {
       const onlineUsers = this.socketService.onlineUsers();
-      console.log('👥 Online users updated:', onlineUsers.length, 'users');
-      this.onlineUserIds.set(new Set(onlineUsers));
+      console.log('👥 Online users updated:', onlineUsers.length, 'users', onlineUsers);
+      // Force new Set to trigger all dependent updates
+      this.onlineUserIds.set(new Set([...onlineUsers]));
+      
+      // Log detailed online status
+      const selected = this.selectedUser();
+      if (selected) {
+        const userId = (selected as any)._id || selected.id;
+        const isOnline = onlineUsers.includes(userId);
+        console.log('🔍 Selected user:', userId, 'Online status:', isOnline ? '🟮 ONLINE' : '⚫ OFFLINE');
+      }
     });
 
     // Listen to typing indicators
@@ -748,6 +760,12 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.loadConversations();
     }, 30000);
     
+    // Refresh online users every 10 seconds
+    setInterval(() => {
+      console.log('🔄 Requesting fresh online users list...');
+      this.socketService.requestOnlineUsers();
+    }, 10000);
+    
     // Request notification permission
     this.notificationService.requestPermission();
     // Ensure call service listeners are initialized
@@ -766,7 +784,17 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         console.log('Conversations response:', response);
         if (response.success) {
           console.log('Conversations data:', response.data);
-          this.conversations.set(response.data);
+          // Ensure conversation IDs are set correctly
+          const formattedConvs = response.data.map(conv => {
+            if (!conv._id) {
+              const currentUserId = (this.currentUser() as any)?._id || this.currentUser()?.id;
+              const senderId = (conv.lastMessage.sender as any)?._id || (conv.lastMessage.sender as any)?.id;
+              const receiverId = (conv.lastMessage.receiver as any)?._id || (conv.lastMessage.receiver as any)?.id;
+              conv._id = senderId === currentUserId ? receiverId : senderId;
+            }
+            return conv;
+          });
+          this.conversations.set(formattedConvs);
         }
       },
       error: (error) => {
@@ -1378,44 +1406,47 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
     
     console.log('🔄 Updating conversation with message:', {
       messageId: message._id,
-      content: message.content,
+      content: message.content?.substring(0, 50),
+      type: message.type,
       senderId,
       receiverId,
-      otherUserId,
-      currentUserId
+      otherUserId
     });
     
     this.conversations.update(convs => {
-      console.log('📋 Current conversations:', convs.length);
-      
-      // Check if conversation exists
+      // Check if conversation exists with this user
       const existingIndex = convs.findIndex(conv => {
+        // Handle both _id and id formats for conversation ID
+        const convId = conv._id;
+        // Also check by comparing user IDs in last message
         const convSenderId = (conv.lastMessage.sender as any)?._id || (conv.lastMessage.sender as any)?.id;
         const convReceiverId = (conv.lastMessage.receiver as any)?._id || (conv.lastMessage.receiver as any)?.id;
-        const matches = (convSenderId === otherUserId || convReceiverId === otherUserId);
-        return matches;
+        
+        // Match if either sender or receiver matches the other user
+        const sendMatch = convSenderId === otherUserId || convReceiverId === otherUserId;
+        const recvMatch = convSenderId === currentUserId || convReceiverId === currentUserId;
+        
+        return sendMatch && recvMatch;
       });
 
       if (existingIndex !== -1) {
-        console.log('✏️ Updating existing conversation at index:', existingIndex);
-        // Update existing conversation
+        console.log('✅ Updating conversation at index:', existingIndex);
+        // Update existing conversation and move to top
         const updated = [...convs];
+        const conversation = updated[existingIndex];
         updated[existingIndex] = {
-          ...updated[existingIndex],
-          lastMessage: message,
-          updatedAt: message.createdAt
+          ...conversation,
+          lastMessage: message
         };
         // Move to top
         const [movedConv] = updated.splice(existingIndex, 1);
         return [movedConv, ...updated];
       } else {
-        console.log('➕ Adding new conversation');
-        // Add new conversation - need to have full user objects
-        const otherUser = senderId === currentUserId ? message.receiver : message.sender;
+        console.log('➕ Creating new conversation');
+        // Add new conversation at the top
         return [{
-          _id: `conv_${message._id}`,
-          lastMessage: message,
-          updatedAt: message.createdAt
+          _id: otherUserId,
+          lastMessage: message
         }, ...convs];
       }
     });

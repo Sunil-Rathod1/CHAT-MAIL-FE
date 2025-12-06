@@ -50,15 +50,20 @@ export class SocketService {
     this.socket.on('connect', () => {
       console.log('✅ Connected to Socket.IO server', this.socket?.id);
       this.isConnected.set(true);
+      // Request online users list on connect/reconnect
+      console.log('📡 Requesting online users list...');
     });
 
     this.socket.on('connect_error', (error) => {
       console.error('❌ Connection error:', error.message);
+      this.isConnected.set(false);
     });
 
     this.socket.on('reconnect', (attemptNumber) => {
       console.log('🔄 Reconnected after', attemptNumber, 'attempts');
       this.isConnected.set(true);
+      // Clear and refresh online users after reconnection
+      console.log('📡 Refreshing online users after reconnection...');
     });
 
     this.socket.on('disconnect', () => {
@@ -78,23 +83,26 @@ export class SocketService {
 
     // Receive full list of online users on connect
     this.socket.on('users:online', (data: { userIds: string[] }) => {
-      console.log('📋 Online users:', data.userIds);
-      this.onlineUsers.set(data.userIds);
+      console.log('📋 Online users LIST received:', data.userIds);
+      // Force new array reference to trigger signal update
+      this.onlineUsers.set([...data.userIds]);
     });
 
     this.socket.on('user:online', (data: { userId: string }) => {
-      console.log('🟢 User online:', data.userId);
+      console.log('🟮 User came online:', data.userId);
       this.onlineUsers.update(users => {
-        if (!users.includes(data.userId)) {
-          return [...users, data.userId];
-        }
-        return users;
+        // Always create new array even if user exists
+        const filtered = users.filter(id => id !== data.userId);
+        return [...filtered, data.userId];
       });
     });
 
     this.socket.on('user:offline', (data: { userId: string }) => {
-      console.log('⚫ User offline:', data.userId);
-      this.onlineUsers.update(users => users.filter(id => id !== data.userId));
+      console.log('⚫ User went offline:', data.userId);
+      this.onlineUsers.update(users => {
+        // Always create new array to force update
+        return users.filter(id => id !== data.userId);
+      });
     });
 
     this.socket.on('typing:user', (data: { userId: string; isTyping: boolean }) => {
@@ -262,6 +270,15 @@ export class SocketService {
       this.socket.disconnect();
       this.socket = null;
       this.isConnected.set(false);
+      this.onlineUsers.set([]);
+    }
+  }
+
+  requestOnlineUsers(): void {
+    // Request fresh online users list from server
+    if (this.socket?.connected) {
+      console.log('🔄 Requesting fresh online users list...');
+      this.socket.emit('request:online-users');
     }
   }
 
