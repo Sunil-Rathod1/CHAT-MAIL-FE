@@ -15,6 +15,7 @@ export class SocketService {
   isConnected = signal<boolean>(false);
   messages = signal<Message[]>([]);
   newMessage = signal<{ message: Message | null; timestamp: number }>({ message: null, timestamp: 0 });  // Signal for real-time new messages
+  messageStatusUpdate = signal<{ messageId: string; status: string; timestamp: number } | null>(null);  // Signal for status updates
   onlineUsers = signal<string[]>([]);
   typingUsers = signal<Map<string, boolean>>(new Map());
   reactionUpdates = signal<{ messageId: string; reactions: any[]; timestamp: number } | null>(null);
@@ -118,12 +119,14 @@ export class SocketService {
     });
 
     this.socket.on('message:status', (data: { messageId: string; status: string }) => {
-      console.log('📬 Message status update:', data);
+      console.log('📬 Message status update:', data.messageId, '→', data.status);
       this.messages.update(msgs =>
         msgs.map(msg =>
           msg._id === data.messageId ? { ...msg, status: data.status as any } : msg
         )
       );
+      // Trigger status update signal with timestamp
+      this.messageStatusUpdate.set({ messageId: data.messageId, status: data.status, timestamp: Date.now() });
     });
 
     // Handle bulk messages read

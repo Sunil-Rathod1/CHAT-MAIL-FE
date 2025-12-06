@@ -660,6 +660,22 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       }
     });
 
+    // Listen to message status updates (ticks: sent → delivered → read)
+    effect(() => {
+      const statusUpdate = this.socketService.messageStatusUpdate();
+
+      if (statusUpdate && statusUpdate.messageId) {
+        console.log('✓ Updating message status:', statusUpdate.messageId, '→', statusUpdate.status);
+        this.chatMessages.update(msgs =>
+          msgs.map(msg =>
+            msg._id === statusUpdate.messageId
+              ? { ...msg, status: statusUpdate.status as any }
+              : msg
+          )
+        );
+      }
+    });
+
     // Phase 2: Listen to message edits
     effect(() => {
       const editUpdate = this.socketService.messageEdited();
