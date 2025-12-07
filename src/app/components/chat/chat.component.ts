@@ -13,6 +13,8 @@ import { VideoCallComponent } from '../video-call/video-call.component';
 import { User } from '../../models/user.model';
 import { Message } from '../../models/message.model';
 
+// Media viewer component with image lightbox, video player, and document viewer
+
 @Component({
   selector: 'app-chat',
   imports: [CommonModule, FormsModule, EmojiPickerComponent, VideoCallComponent],
@@ -173,8 +175,45 @@ import { Message } from '../../models/message.model';
                       @if (message.deletedForEveryone) {
                         <p class="deleted-message"><em>🚫 This message was deleted</em></p>
                       } @else if (message.type === 'image') {
-                        <div class="message-image">
-                          <img [src]="message.content" alt="Image" />
+                        <div class="message-image" (click)="openImageLightbox(message.content)">
+                          <img [src]="message.content" alt="Image" loading="lazy" />
+                        </div>
+                      } @else if (message.type === 'video') {
+                        <div class="message-video">
+                          <video controls [src]="message.content" (click)="openVideoPlayer(message.content)"></video>
+                          <button class="video-fullscreen-btn" (click)="openVideoPlayer(message.content)" title="Open in full screen">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+                            </svg>
+                          </button>
+                        </div>
+                      } @else if (message.type === 'document') {
+                        <div class="message-document">
+                          <div class="document-info">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+                              <polyline points="13 2 13 9 20 9"/>
+                            </svg>
+                            <div class="document-details">
+                              <span class="document-name">{{ getFileName(message.content) }}</span>
+                              <span class="document-size">{{ message.fileSize || 'Document' }}</span>
+                            </div>
+                          </div>
+                          <div class="document-actions">
+                            <button class="btn-download" (click)="downloadFile(message.content, getFileName(message.content))" title="Download">
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                              </svg>
+                            </button>
+                            <button class="btn-view" (click)="openDocumentViewer(message.content, getFileName(message.content))" title="View">
+                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                       } @else {
                         <p>{{ message.content }}</p>
@@ -484,6 +523,78 @@ import { Message } from '../../models/message.model';
           </div>
         </div>
       }
+
+      <!-- Image Lightbox -->
+      @if (showImageLightbox()) {
+        <div class="lightbox-overlay" (click)="closeImageLightbox()">
+          <div class="lightbox-content" (click)="$event.stopPropagation()">
+            <button class="lightbox-close" (click)="closeImageLightbox()">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <img [src]="lightboxImageUrl()" alt="Full size image" />
+            <button class="lightbox-download" (click)="downloadFile(lightboxImageUrl()!, 'image.jpg')" title="Download">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- Video Player Modal -->
+      @if (showVideoPlayer()) {
+        <div class="video-modal-overlay" (click)="closeVideoPlayer()">
+          <div class="video-modal-content" (click)="$event.stopPropagation()">
+            <button class="video-modal-close" (click)="closeVideoPlayer()">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <video controls autoplay [src]="videoPlayerUrl()"></video>
+            <button class="video-download" (click)="downloadFile(videoPlayerUrl()!, 'video.mp4')" title="Download">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download
+            </button>
+          </div>
+        </div>
+      }
+
+      <!-- Document Viewer Modal -->
+      @if (showDocumentViewer()) {
+        <div class="document-modal-overlay" (click)="closeDocumentViewer()">
+          <div class="document-modal-content" (click)="$event.stopPropagation()">
+            <div class="document-modal-header">
+              <h3>{{ documentFileName() }}</h3>
+              <button class="document-modal-close" (click)="closeDocumentViewer()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            <iframe [src]="documentViewerUrl()" frameborder="0"></iframe>
+            <button class="document-download" (click)="downloadFile(documentViewerUrl()!, documentFileName()!)" title="Download">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download
+            </button>
+          </div>
+        </div>
+      }
     </div>
   `,
   styleUrl: './chat.component.css'
@@ -527,6 +638,15 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   uploadProgress = signal<number>(0);
   showMediaPreview = signal<boolean>(false);
   mediaCaption = '';
+
+  // Media viewer signals
+  showImageLightbox = signal<boolean>(false);
+  lightboxImageUrl = signal<string | null>(null);
+  showVideoPlayer = signal<boolean>(false);
+  videoPlayerUrl = signal<string | null>(null);
+  showDocumentViewer = signal<boolean>(false);
+  documentViewerUrl = signal<string | null>(null);
+  documentFileName = signal<string | null>(null);
 
   constructor() {
     // Listen to new real-time messages
@@ -1466,5 +1586,75 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
         }, ...convs];
       }
     });
+  }
+
+  // Media viewer methods
+  openImageLightbox(imageUrl: string): void {
+    this.lightboxImageUrl.set(imageUrl);
+    this.showImageLightbox.set(true);
+  }
+
+  closeImageLightbox(): void {
+    this.showImageLightbox.set(false);
+    this.lightboxImageUrl.set(null);
+  }
+
+  openVideoPlayer(videoUrl: string): void {
+    this.videoPlayerUrl.set(videoUrl);
+    this.showVideoPlayer.set(true);
+  }
+
+  closeVideoPlayer(): void {
+    this.showVideoPlayer.set(false);
+    this.videoPlayerUrl.set(null);
+  }
+
+  openDocumentViewer(documentUrl: string, fileName: string): void {
+    this.documentViewerUrl.set(documentUrl);
+    this.documentFileName.set(fileName);
+    this.showDocumentViewer.set(true);
+  }
+
+  closeDocumentViewer(): void {
+    this.showDocumentViewer.set(false);
+    this.documentViewerUrl.set(null);
+    this.documentFileName.set(null);
+  }
+
+  getFileName(url: string): string {
+    if (!url) return 'Document';
+    const parts = url.split('/');
+    const fileName = parts[parts.length - 1];
+    return decodeURIComponent(fileName);
+  }
+
+  downloadFile(fileUrl: string, fileName: string): void {
+    fetch(fileUrl)
+      .then(response => response.blob())
+      .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      })
+      .catch(error => {
+        console.error('Download failed:', error);
+        alert('Failed to download file');
+      });
+  }
+
+  @HostListener('document:keydown.escape')
+  handleEscapeKey(): void {
+    if (this.showImageLightbox()) {
+      this.closeImageLightbox();
+    } else if (this.showVideoPlayer()) {
+      this.closeVideoPlayer();
+    } else if (this.showDocumentViewer()) {
+      this.closeDocumentViewer();
+    }
   }
 }

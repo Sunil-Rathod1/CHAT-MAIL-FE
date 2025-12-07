@@ -3,10 +3,10 @@ export interface Message {
   sender: any;
   receiver?: any;
   content: string;
-  type: 'text' | 'image' | 'file' | 'voice';
+  type: 'text' | 'image' | 'video' | 'document' | 'file' | 'voice';
   fileUrl?: string;
   fileName?: string;
-  fileSize?: number;
+  fileSize?: number | string;
   status: 'sent' | 'delivered' | 'read';
   readAt?: Date;
   reactions?: Reaction[];
