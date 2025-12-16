@@ -289,9 +289,14 @@ export class SocketService {
     return this.socket;
   }
 
-  sendMessage(receiverId: string, content: string, type: string = 'text', replyTo?: any): void {
+  sendMessage(receiverId: string, content: string, type: string = 'text', replyTo?: any, voiceData?: { voiceDuration?: number; voiceWaveform?: number[] }): void {
     if (this.socket) {
-      this.socket.emit('message:send', { receiverId, content, type, replyTo });
+      const messageData: any = { receiverId, content, type, replyTo };
+      if (voiceData) {
+        messageData.voiceDuration = voiceData.voiceDuration;
+        messageData.voiceWaveform = voiceData.voiceWaveform;
+      }
+      this.socket.emit('message:send', messageData);
     }
   }
 

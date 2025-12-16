@@ -8,8 +8,11 @@ import { UserService } from '../../services/user.service';
 import { AudioService } from '../../services/audio.service';
 import { NotificationService } from '../../services/notification.service';
 import { CallService } from '../../services/call.service';
+import { VoiceRecorderService } from '../../services/voice-recorder.service';
+import { StickerService, Sticker } from '../../services/sticker.service';
 import { EmojiPickerComponent } from '../emoji-picker/emoji-picker.component';
 import { VideoCallComponent } from '../video-call/video-call.component';
+import { StickerPickerComponent } from '../sticker-picker/sticker-picker.component';
 import { User } from '../../models/user.model';
 import { Message } from '../../models/message.model';
 
@@ -17,7 +20,7 @@ import { Message } from '../../models/message.model';
 
 @Component({
   selector: 'app-chat',
-  imports: [CommonModule, FormsModule, EmojiPickerComponent, VideoCallComponent],
+  imports: [CommonModule, FormsModule, EmojiPickerComponent, VideoCallComponent, StickerPickerComponent],
   template: `
     <div class="chat-container">
       <!-- Sidebar -->
@@ -33,11 +36,19 @@ import { Message } from '../../models/message.model';
               </span>
             </div>
           </div>
-          <button class="btn-icon" (click)="logout()" title="Logout">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
-            </svg>
-          </button>
+          <div class="header-actions">
+            <button class="btn-icon" (click)="notificationService.toggleSettingsPanel()" title="Notification Settings">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+            </button>
+            <button class="btn-icon" (click)="logout()" title="Logout">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <!-- Search -->
@@ -215,6 +226,31 @@ import { Message } from '../../models/message.model';
                             </button>
                           </div>
                         </div>
+                      } @else if (message.type === 'voice') {
+                        <div class="voice-message">
+                          <button class="voice-play-btn" (click)="toggleVoicePlayback(message)">
+                            @if (playingVoiceId() === message._id) {
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="6" y="4" width="4" height="16" rx="1"/>
+                                <rect x="14" y="4" width="4" height="16" rx="1"/>
+                              </svg>
+                            } @else {
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                              </svg>
+                            }
+                          </button>
+                          <div class="voice-waveform">
+                            @for (bar of getVoiceWaveform(message); track $index) {
+                              <div class="waveform-bar" [style.height.%]="bar"></div>
+                            }
+                          </div>
+                          <span class="voice-duration">{{ formatVoiceDuration(message.voiceDuration || 0) }}</span>
+                        </div>
+                      } @else if (message.type === 'sticker') {
+                        <div class="sticker-message">
+                          <img [src]="message.content" alt="Sticker" class="sticker-img" />
+                        </div>
                       } @else {
                         <p>{{ message.content }}</p>
                       }
@@ -360,37 +396,130 @@ import { Message } from '../../models/message.model';
               </div>
             }
             
-            <div class="input-controls">
-              <!-- File Upload Inputs -->
-              <input 
-                type="file" 
-                accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" 
-                (change)="onFileSelected($event)"
-                #fileInput
-                style="display: none;"
-              />
-              
-              <!-- Attachment Menu Button -->
-              <button class="btn-icon" (click)="fileInput.click()" title="Attach file">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                </svg>
-              </button>
-              
-              <input 
-                type="text" 
-                [(ngModel)]="messageInput"
-                (input)="onTyping()"
-                (keyup.enter)="sendMessage()"
-                placeholder="Type a message..."
-                class="message-input"
-              />
-              <button class="btn-send" (click)="sendMessage()" [disabled]="!messageInput.trim()">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                </svg>
-              </button>
-            </div>
+            <!-- Voice Recording UI -->
+            @if (voiceRecorder.recordingState().isRecording || voiceRecorder.audioUrl()) {
+              <div class="voice-recording-ui">
+                @if (voiceRecorder.recordingState().isRecording) {
+                  <div class="recording-active">
+                    <span class="recording-indicator"></span>
+                    <div class="recording-waveform">
+                      @for (bar of voiceRecorder.recordingState().waveform; track $index) {
+                        <div class="waveform-bar recording" [style.height.%]="bar"></div>
+                      }
+                    </div>
+                    <span class="recording-time">{{ voiceRecorder.formatDuration(voiceRecorder.recordingState().duration) }}</span>
+                    <button class="btn-icon cancel-btn" (click)="cancelVoiceRecording()" title="Cancel">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                    <button class="btn-icon stop-btn" (click)="stopVoiceRecording()" title="Stop">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12" rx="2"/>
+                      </svg>
+                    </button>
+                  </div>
+                } @else if (voiceRecorder.audioUrl()) {
+                  <div class="recording-preview">
+                    <button class="btn-icon play-btn" (click)="playRecordedVoice()" title="Play">
+                      @if (isPlayingRecording()) {
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <rect x="6" y="4" width="4" height="16" rx="1"/>
+                          <rect x="14" y="4" width="4" height="16" rx="1"/>
+                        </svg>
+                      } @else {
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                      }
+                    </button>
+                    <div class="preview-waveform">
+                      @for (bar of voiceRecorder.recordingState().waveform; track $index) {
+                        <div class="waveform-bar" [style.height.%]="bar"></div>
+                      }
+                    </div>
+                    <span class="preview-time">{{ voiceRecorder.formatDuration(voiceRecorder.recordingState().duration) }}</span>
+                    <button class="btn-icon delete-btn" (click)="deleteVoiceRecording()" title="Delete">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
+                    <button class="btn-send voice-send" (click)="sendVoiceMessage()" [disabled]="uploadingVoice()" title="Send">
+                      @if (uploadingVoice()) {
+                        <span class="sending-spinner"></span>
+                      } @else {
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                      }
+                    </button>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="input-controls">
+                <!-- File Upload Inputs -->
+                <input 
+                  type="file" 
+                  accept="image/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" 
+                  (change)="onFileSelected($event)"
+                  #fileInput
+                  style="display: none;"
+                />
+                
+                <!-- Attachment Menu Button -->
+                <button class="btn-icon" (click)="fileInput.click()" title="Attach file">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                </button>
+
+                <!-- Sticker Button -->
+                <div class="sticker-btn-wrapper">
+                  <button class="btn-icon" (click)="toggleStickerPicker()" title="Send sticker">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                      <line x1="9" y1="9" x2="9.01" y2="9"/>
+                      <line x1="15" y1="9" x2="15.01" y2="9"/>
+                    </svg>
+                  </button>
+                  <app-sticker-picker 
+                    [isOpen]="showStickerPicker()"
+                    (stickerSelected)="onStickerSelected($event)"
+                  />
+                </div>
+                
+                <input 
+                  type="text" 
+                  [(ngModel)]="messageInput"
+                  (input)="onTyping()"
+                  (keyup.enter)="sendMessage()"
+                  placeholder="Type a message..."
+                  class="message-input"
+                />
+                
+                <!-- Voice Record Button (when no text) -->
+                @if (!messageInput.trim()) {
+                  <button class="btn-icon voice-btn" (click)="startVoiceRecording()" title="Record voice message">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" y1="19" x2="12" y2="23"/>
+                      <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                  </button>
+                } @else {
+                  <button class="btn-send" (click)="sendMessage()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                  </button>
+                }
+              </div>
+            }
           </div>
         } @else {
           <!-- Empty State -->
@@ -595,6 +724,143 @@ import { Message } from '../../models/message.model';
           </div>
         </div>
       }
+
+      <!-- Notification Settings Panel -->
+      @if (notificationService.showSettingsPanel()) {
+        <div class="notification-settings-overlay" (click)="notificationService.toggleSettingsPanel()">
+          <div class="notification-settings-panel" (click)="$event.stopPropagation()">
+            <div class="settings-header">
+              <h3>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+                Notification Settings
+              </h3>
+              <button class="close-settings" (click)="notificationService.toggleSettingsPanel()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/>
+                  <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+            
+            <div class="settings-content">
+              @if (notificationService.getPermission() !== 'granted') {
+                <div class="permission-banner">
+                  <p>Enable desktop notifications to stay updated</p>
+                  <button class="enable-btn" (click)="enableNotifications()">
+                    Enable Notifications
+                  </button>
+                </div>
+              }
+              
+              <div class="settings-group">
+                <label class="setting-item">
+                  <span class="setting-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
+                    </svg>
+                    All Notifications
+                  </span>
+                  <button 
+                    class="toggle-btn" 
+                    [class.active]="notificationService.settings().enabled"
+                    (click)="notificationService.toggleSetting('enabled')"
+                  >
+                    <span class="toggle-slider"></span>
+                  </button>
+                </label>
+
+                <label class="setting-item" [class.disabled]="!notificationService.settings().enabled">
+                  <span class="setting-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                    </svg>
+                    Message Notifications
+                  </span>
+                  <button 
+                    class="toggle-btn" 
+                    [class.active]="notificationService.settings().messages"
+                    [disabled]="!notificationService.settings().enabled"
+                    (click)="notificationService.toggleSetting('messages')"
+                  >
+                    <span class="toggle-slider"></span>
+                  </button>
+                </label>
+
+                <label class="setting-item" [class.disabled]="!notificationService.settings().enabled">
+                  <span class="setting-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56-.35-.12-.74-.03-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z"/>
+                    </svg>
+                    Call Notifications
+                  </span>
+                  <button 
+                    class="toggle-btn" 
+                    [class.active]="notificationService.settings().calls"
+                    [disabled]="!notificationService.settings().enabled"
+                    (click)="notificationService.toggleSetting('calls')"
+                  >
+                    <span class="toggle-slider"></span>
+                  </button>
+                </label>
+
+                <label class="setting-item" [class.disabled]="!notificationService.settings().enabled">
+                  <span class="setting-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                    </svg>
+                    Group Notifications
+                  </span>
+                  <button 
+                    class="toggle-btn" 
+                    [class.active]="notificationService.settings().groups"
+                    [disabled]="!notificationService.settings().enabled"
+                    (click)="notificationService.toggleSetting('groups')"
+                  >
+                    <span class="toggle-slider"></span>
+                  </button>
+                </label>
+
+                <label class="setting-item" [class.disabled]="!notificationService.settings().enabled">
+                  <span class="setting-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                    Notification Sound
+                  </span>
+                  <button 
+                    class="toggle-btn" 
+                    [class.active]="notificationService.settings().sound"
+                    [disabled]="!notificationService.settings().enabled"
+                    (click)="notificationService.toggleSetting('sound')"
+                  >
+                    <span class="toggle-slider"></span>
+                  </button>
+                </label>
+
+                <label class="setting-item" [class.disabled]="!notificationService.settings().enabled">
+                  <span class="setting-label">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20 3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H4V5h16v14z"/>
+                    </svg>
+                    Desktop Notifications
+                  </span>
+                  <button 
+                    class="toggle-btn" 
+                    [class.active]="notificationService.settings().desktop"
+                    [disabled]="!notificationService.settings().enabled"
+                    (click)="notificationService.toggleSetting('desktop')"
+                  >
+                    <span class="toggle-slider"></span>
+                  </button>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styleUrl: './chat.component.css'
@@ -604,13 +870,17 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   chatService = inject(ChatService);
   socketService = inject(SocketService);
   callService = inject(CallService);
+  voiceRecorder = inject(VoiceRecorderService);
+  notificationService = inject(NotificationService);
+  stickerService = inject(StickerService);
   private userService = inject(UserService);
   private audioService = inject(AudioService);
-  private notificationService = inject(NotificationService);
 
   @ViewChild('messagesContainer') private messagesContainer!: ElementRef;
   private shouldScrollToBottom = true;
   private typingTimeout: any;
+  private voiceAudioElement: HTMLAudioElement | null = null;
+  private recordedAudioElement: HTMLAudioElement | null = null;
 
   currentUser = this.authService.currentUser;
   searchQuery = '';
@@ -647,6 +917,14 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
   showDocumentViewer = signal<boolean>(false);
   documentViewerUrl = signal<string | null>(null);
   documentFileName = signal<string | null>(null);
+
+  // Voice message signals
+  uploadingVoice = signal<boolean>(false);
+  playingVoiceId = signal<string | null>(null);
+  isPlayingRecording = signal<boolean>(false);
+
+  // Sticker picker signal
+  showStickerPicker = signal<boolean>(false);
 
   constructor() {
     // Listen to new real-time messages
@@ -1655,6 +1933,158 @@ export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
       this.closeVideoPlayer();
     } else if (this.showDocumentViewer()) {
       this.closeDocumentViewer();
+    }
+  }
+
+  // ============= VOICE MESSAGE METHODS =============
+
+  async startVoiceRecording(): Promise<void> {
+    try {
+      await this.voiceRecorder.startRecording();
+    } catch (error) {
+      console.error('Failed to start voice recording:', error);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  }
+
+  stopVoiceRecording(): void {
+    this.voiceRecorder.stopRecording();
+  }
+
+  cancelVoiceRecording(): void {
+    this.voiceRecorder.cancelRecording();
+  }
+
+  deleteVoiceRecording(): void {
+    this.voiceRecorder.clearRecording();
+  }
+
+  playRecordedVoice(): void {
+    const audioUrl = this.voiceRecorder.audioUrl();
+    if (!audioUrl) return;
+
+    if (this.recordedAudioElement) {
+      if (this.isPlayingRecording()) {
+        this.recordedAudioElement.pause();
+        this.isPlayingRecording.set(false);
+        return;
+      }
+    }
+
+    this.recordedAudioElement = new Audio(audioUrl);
+    this.recordedAudioElement.play();
+    this.isPlayingRecording.set(true);
+
+    this.recordedAudioElement.onended = () => {
+      this.isPlayingRecording.set(false);
+    };
+  }
+
+  async sendVoiceMessage(): Promise<void> {
+    const selected = this.selectedUser();
+    if (!selected) return;
+
+    this.uploadingVoice.set(true);
+    const token = this.authService.getToken();
+
+    try {
+      const response = await this.voiceRecorder.uploadVoiceMessage(token!).toPromise();
+      
+      if (response?.success) {
+        const receiverId = (selected as any)._id || selected.id;
+        const duration = this.voiceRecorder.recordingState().duration;
+        const waveform = this.voiceRecorder.recordingState().waveform;
+
+        // Send voice message via socket
+        this.socketService.sendMessage(receiverId, response.data.url, 'voice', undefined, {
+          voiceDuration: duration,
+          voiceWaveform: waveform
+        });
+
+        this.audioService.playSend();
+        this.voiceRecorder.clearRecording();
+        this.shouldScrollToBottom = true;
+      }
+    } catch (error) {
+      console.error('Failed to upload voice message:', error);
+      alert('Failed to send voice message');
+    } finally {
+      this.uploadingVoice.set(false);
+    }
+  }
+
+  toggleVoicePlayback(message: Message): void {
+    const messageId = message._id;
+    const audioUrl = message.content;
+
+    if (this.playingVoiceId() === messageId) {
+      // Stop current playback
+      if (this.voiceAudioElement) {
+        this.voiceAudioElement.pause();
+        this.voiceAudioElement = null;
+      }
+      this.playingVoiceId.set(null);
+      return;
+    }
+
+    // Stop any existing playback
+    if (this.voiceAudioElement) {
+      this.voiceAudioElement.pause();
+    }
+
+    // Start new playback
+    this.voiceAudioElement = new Audio(audioUrl);
+    this.voiceAudioElement.play();
+    this.playingVoiceId.set(messageId!);
+
+    this.voiceAudioElement.onended = () => {
+      this.playingVoiceId.set(null);
+      this.voiceAudioElement = null;
+    };
+  }
+
+  getVoiceWaveform(message: Message): number[] {
+    if (message.voiceWaveform && message.voiceWaveform.length > 0) {
+      return message.voiceWaveform;
+    }
+    // Generate default waveform if none exists
+    return Array.from({ length: 30 }, () => Math.floor(Math.random() * 60) + 20);
+  }
+
+  formatVoiceDuration(seconds: number): string {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  }
+
+  // ============= STICKER METHODS =============
+
+  toggleStickerPicker(): void {
+    this.showStickerPicker.update(v => !v);
+  }
+
+  onStickerSelected(sticker: Sticker): void {
+    const selected = this.selectedUser();
+    if (!selected) return;
+
+    const receiverId = (selected as any)._id || selected.id;
+
+    // Send sticker as a special message type
+    // We'll send it as an image message with the sticker URL
+    this.socketService.sendMessage(receiverId, sticker.url, 'sticker');
+    this.audioService.playSend();
+    this.showStickerPicker.set(false);
+    this.shouldScrollToBottom = true;
+  }
+
+  // Enable push notifications
+  async enableNotifications(): Promise<void> {
+    const granted = await this.notificationService.requestPermission();
+    if (granted) {
+      this.notificationService.showNotification('Notifications Enabled!', {
+        body: 'You will now receive notifications for new messages and calls.',
+        tag: 'welcome-notification'
+      });
     }
   }
 }

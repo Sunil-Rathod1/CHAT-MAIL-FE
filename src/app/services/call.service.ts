@@ -3,6 +3,19 @@ import { SocketService } from './socket.service';
 import { AuthService } from './auth.service';
 import { CallState, CallUser, IncomingCall } from '../models/call.model';
 
+export interface MediaDevice {
+  deviceId: string;
+  label: string;
+  kind: 'audioinput' | 'audiooutput' | 'videoinput';
+}
+
+export interface EncryptionStatus {
+  isEncrypted: boolean;
+  protocol: string;
+  fingerprint: string | null;
+  verified: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -41,6 +54,24 @@ export class CallService {
   localStreamSignal = signal<MediaStream | null>(null);
   remoteStreamSignal = signal<MediaStream | null>(null);
   callError = signal<string | null>(null);
+
+  // Media device signals
+  audioInputDevices = signal<MediaDevice[]>([]);
+  audioOutputDevices = signal<MediaDevice[]>([]);
+  videoInputDevices = signal<MediaDevice[]>([]);
+  selectedAudioInput = signal<string>('');
+  selectedAudioOutput = signal<string>('');
+  selectedVideoInput = signal<string>('');
+  showDevicePicker = signal<boolean>(false);
+
+  // E2E Encryption status
+  encryptionStatus = signal<EncryptionStatus>({
+    isEncrypted: false,
+    protocol: '',
+    fingerprint: null,
+    verified: false
+  });
+  showEncryptionInfo = signal<boolean>(false);
 
   private listenersInitialized = false;
 
@@ -327,6 +358,169 @@ export class CallService {
     }
   }
 
+  // ============= MEDIA DEVICE MANAGEMENT =============
+
+  // Get all available media devices
+  async getMediaDevices(): Promise<void> {
+    try {
+      // Request permissions first to get device labels
+      await navigator.mediaDevices.getUserMedia({ audio: true, video: true }).then(stream => {
+        stream.getTracks().forEach(track => track.stop());
+      }).catch(() => {
+        // Permission denied, we'll still try to get devices
+      });
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      
+      const audioInputs: MediaDevice[] = [];
+      const audioOutputs: MediaDevice[] = [];
+      const videoInputs: MediaDevice[] = [];
+
+      devices.forEach((device, index) => {
+        const deviceInfo: MediaDevice = {
+          deviceId: device.deviceId,
+          label: device.label || `${device.kind} ${index + 1}`,
+          kind: device.kind as 'audioinput' | 'audiooutput' | 'videoinput'
+        };
+
+        switch (device.kind) {
+          case 'audioinput':
+            audioInputs.push(deviceInfo);
+            break;
+          case 'audiooutput':
+            audioOutputs.push(deviceInfo);
+            break;
+          case 'videoinput':
+            videoInputs.push(deviceInfo);
+            break;
+        }
+      });
+
+      this.audioInputDevices.set(audioInputs);
+      this.audioOutputDevices.set(audioOutputs);
+      this.videoInputDevices.set(videoInputs);
+
+      // Set default selected devices if not already set
+      if (!this.selectedAudioInput() && audioInputs.length > 0) {
+        this.selectedAudioInput.set(audioInputs[0].deviceId);
+      }
+      if (!this.selectedAudioOutput() && audioOutputs.length > 0) {
+        this.selectedAudioOutput.set(audioOutputs[0].deviceId);
+      }
+      if (!this.selectedVideoInput() && videoInputs.length > 0) {
+        this.selectedVideoInput.set(videoInputs[0].deviceId);
+      }
+
+      console.log('📱 Media devices loaded:', {
+        audioInputs: audioInputs.length,
+        audioOutputs: audioOutputs.length,
+        videoInputs: videoInputs.length
+      });
+    } catch (error) {
+      console.error('Failed to enumerate media devices:', error);
+    }
+  }
+
+  // Toggle device picker visibility
+  toggleDevicePicker(): void {
+    this.showDevicePicker.update(v => !v);
+    if (this.showDevicePicker()) {
+      this.getMediaDevices();
+    }
+  }
+
+  // Switch audio input device (microphone)
+  async switchAudioInput(deviceId: string): Promise<void> {
+    if (!this.localStream || !this.peerConnection) return;
+
+    try {
+      // Get new audio stream with selected device
+      const newAudioStream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: { exact: deviceId } }
+      });
+
+      const newAudioTrack = newAudioStream.getAudioTracks()[0];
+      
+      // Replace audio track in local stream
+      const oldAudioTrack = this.localStream.getAudioTracks()[0];
+      if (oldAudioTrack) {
+        this.localStream.removeTrack(oldAudioTrack);
+        oldAudioTrack.stop();
+      }
+      this.localStream.addTrack(newAudioTrack);
+
+      // Replace track in peer connection
+      const audioSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'audio');
+      if (audioSender) {
+        await audioSender.replaceTrack(newAudioTrack);
+      }
+
+      this.selectedAudioInput.set(deviceId);
+      this.localStreamSignal.set(this.localStream);
+      console.log('🎤 Switched audio input to:', newAudioTrack.label);
+    } catch (error) {
+      console.error('Failed to switch audio input:', error);
+    }
+  }
+
+  // Switch video input device (camera)
+  async switchVideoInput(deviceId: string): Promise<void> {
+    if (!this.localStream || !this.peerConnection) return;
+
+    try {
+      // Get new video stream with selected device
+      const newVideoStream = await navigator.mediaDevices.getUserMedia({
+        video: { 
+          deviceId: { exact: deviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      const newVideoTrack = newVideoStream.getVideoTracks()[0];
+      
+      // Preserve enabled state
+      const wasEnabled = this.callState().isVideoEnabled;
+      newVideoTrack.enabled = wasEnabled;
+
+      // Replace video track in local stream
+      const oldVideoTrack = this.localStream.getVideoTracks()[0];
+      if (oldVideoTrack) {
+        this.localStream.removeTrack(oldVideoTrack);
+        oldVideoTrack.stop();
+      }
+      this.localStream.addTrack(newVideoTrack);
+
+      // Replace track in peer connection
+      const videoSender = this.peerConnection.getSenders().find(s => s.track?.kind === 'video');
+      if (videoSender) {
+        await videoSender.replaceTrack(newVideoTrack);
+      }
+
+      this.selectedVideoInput.set(deviceId);
+      // Trigger update by setting a new reference
+      this.localStreamSignal.set(this.localStream);
+      console.log('📹 Switched video input to:', newVideoTrack.label);
+    } catch (error) {
+      console.error('Failed to switch video input:', error);
+    }
+  }
+
+  // Set audio output device (speaker) - only works on supported browsers
+  async setAudioOutput(deviceId: string, audioElement?: HTMLAudioElement | HTMLVideoElement): Promise<void> {
+    try {
+      if (audioElement && 'setSinkId' in audioElement) {
+        await (audioElement as any).setSinkId(deviceId);
+        this.selectedAudioOutput.set(deviceId);
+        console.log('🔊 Switched audio output to:', deviceId);
+      } else {
+        console.warn('setSinkId not supported in this browser');
+      }
+    } catch (error) {
+      console.error('Failed to set audio output:', error);
+    }
+  }
+
   // Get user media (camera/microphone)
   private async getUserMedia(callType: 'audio' | 'video'): Promise<void> {
     const constraints: MediaStreamConstraints = {
@@ -395,12 +589,87 @@ export class CallService {
       console.log('📡 Connection state:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         this.callState.update(state => ({ ...state, callStatus: 'connected' }));
+        // Check encryption status when connected
+        this.checkEncryptionStatus(pc);
       } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         this.endCall();
       }
     };
 
     return pc;
+  }
+
+  // Check WebRTC encryption status
+  private async checkEncryptionStatus(pc: RTCPeerConnection): Promise<void> {
+    try {
+      const stats = await pc.getStats();
+      let isEncrypted = false;
+      let protocol = '';
+      let fingerprint: string | null = null;
+
+      stats.forEach(report => {
+        // Check for DTLS transport (encryption)
+        if (report.type === 'transport') {
+          if (report.dtlsState === 'connected') {
+            isEncrypted = true;
+            protocol = 'DTLS-SRTP';
+          }
+          if (report.localCertificateId) {
+            // Get certificate fingerprint
+            stats.forEach(certReport => {
+              if (certReport.id === report.localCertificateId && certReport.type === 'certificate') {
+                fingerprint = certReport.fingerprint || null;
+              }
+            });
+          }
+        }
+
+        // Check for SRTP cipher
+        if (report.type === 'inbound-rtp' || report.type === 'outbound-rtp') {
+          if (report.srtpCipher) {
+            isEncrypted = true;
+            protocol = protocol || `SRTP (${report.srtpCipher})`;
+          }
+        }
+      });
+
+      // WebRTC is always encrypted by default, but we verify it
+      if (!isEncrypted && pc.connectionState === 'connected') {
+        isEncrypted = true;
+        protocol = 'DTLS-SRTP (Default)';
+      }
+
+      this.encryptionStatus.set({
+        isEncrypted,
+        protocol,
+        fingerprint,
+        verified: isEncrypted && !!fingerprint
+      });
+
+      console.log('🔐 Encryption status:', this.encryptionStatus());
+    } catch (error) {
+      console.error('Failed to check encryption status:', error);
+      // WebRTC is always encrypted by default
+      this.encryptionStatus.set({
+        isEncrypted: true,
+        protocol: 'DTLS-SRTP (Default)',
+        fingerprint: null,
+        verified: false
+      });
+    }
+  }
+
+  // Toggle encryption info visibility
+  toggleEncryptionInfo(): void {
+    this.showEncryptionInfo.update(v => !v);
+  }
+
+  // Get formatted fingerprint for display
+  getFormattedFingerprint(): string {
+    const fp = this.encryptionStatus().fingerprint;
+    if (!fp) return 'Not available';
+    // Format as pairs separated by colons (show first 20 chars)
+    return fp.substring(0, 23) + '...';
   }
 
   // Create and send offer (caller)

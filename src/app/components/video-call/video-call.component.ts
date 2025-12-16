@@ -98,7 +98,81 @@ import { CallService } from '../../services/call.service';
         <span class="call-duration" *ngIf="callService.callState().callStatus === 'connected'">
           {{ callDuration }}
         </span>
+        
+        <!-- Encryption Status Indicator -->
+        @if (callService.callState().callStatus === 'connected') {
+          <button 
+            class="encryption-indicator" 
+            [class.encrypted]="callService.encryptionStatus().isEncrypted"
+            (click)="callService.toggleEncryptionInfo()"
+            [title]="callService.encryptionStatus().isEncrypted ? 'End-to-end encrypted' : 'Checking encryption...'"
+          >
+            @if (callService.encryptionStatus().isEncrypted) {
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+              </svg>
+              <span>Encrypted</span>
+            } @else {
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6h1.9c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm0 12H6V10h12v10z"/>
+              </svg>
+              <span>Checking...</span>
+            }
+          </button>
+        }
       </div>
+
+      <!-- Encryption Info Modal -->
+      @if (callService.showEncryptionInfo()) {
+        <div class="encryption-modal-overlay" (click)="callService.toggleEncryptionInfo()">
+          <div class="encryption-modal" (click)="$event.stopPropagation()">
+            <div class="encryption-modal-header">
+              <h3>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
+                </svg>
+                End-to-End Encryption
+              </h3>
+              <button class="close-btn" (click)="callService.toggleEncryptionInfo()">×</button>
+            </div>
+            <div class="encryption-modal-body">
+              @if (callService.encryptionStatus().isEncrypted) {
+                <div class="encryption-status success">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                  </svg>
+                  <span>This call is end-to-end encrypted</span>
+                </div>
+                <div class="encryption-details">
+                  <div class="detail-row">
+                    <span class="label">Protocol:</span>
+                    <span class="value">{{ callService.encryptionStatus().protocol }}</span>
+                  </div>
+                  @if (callService.encryptionStatus().fingerprint) {
+                    <div class="detail-row fingerprint">
+                      <span class="label">Fingerprint:</span>
+                      <span class="value">{{ callService.getFormattedFingerprint() }}</span>
+                    </div>
+                  }
+                </div>
+                <p class="encryption-info">
+                  Your call is secured with DTLS-SRTP encryption. Audio and video streams 
+                  are encrypted before leaving your device and can only be decrypted by 
+                  the other participant.
+                </p>
+              } @else {
+                <div class="encryption-status pending">
+                  <div class="spinner"></div>
+                  <span>Verifying encryption...</span>
+                </div>
+                <p class="encryption-info">
+                  Please wait while we verify the encryption status of your call.
+                </p>
+              }
+            </div>
+          </div>
+        </div>
+      }
 
       <!-- Call Controls -->
       <div class="call-controls">
@@ -140,6 +214,17 @@ import { CallService } from '../../services/call.service';
           </button>
         }
 
+        <!-- Device Picker Button -->
+        <button 
+          class="control-btn settings-btn"
+          (click)="callService.toggleDevicePicker()"
+          title="Switch device"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+          </svg>
+        </button>
+
         <!-- End Call Button -->
         <button 
           class="control-btn end-call"
@@ -151,6 +236,82 @@ import { CallService } from '../../services/call.service';
           </svg>
         </button>
       </div>
+
+      <!-- Device Picker Modal -->
+      @if (callService.showDevicePicker()) {
+        <div class="device-picker-overlay" (click)="callService.toggleDevicePicker()">
+          <div class="device-picker-modal" (click)="$event.stopPropagation()">
+            <div class="device-picker-header">
+              <h3>Device Settings</h3>
+              <button class="close-picker" (click)="callService.toggleDevicePicker()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+              </button>
+            </div>
+            
+            <div class="device-picker-content">
+              <!-- Microphone Selection -->
+              <div class="device-section">
+                <label>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                  </svg>
+                  Microphone
+                </label>
+                <select 
+                  [value]="callService.selectedAudioInput()"
+                  (change)="onAudioInputChange($event)"
+                >
+                  @for (device of callService.audioInputDevices(); track device.deviceId) {
+                    <option [value]="device.deviceId">{{ device.label }}</option>
+                  }
+                </select>
+              </div>
+
+              <!-- Camera Selection (only for video calls) -->
+              @if (callService.callState().callType === 'video') {
+                <div class="device-section">
+                  <label>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                    </svg>
+                    Camera
+                  </label>
+                  <select 
+                    [value]="callService.selectedVideoInput()"
+                    (change)="onVideoInputChange($event)"
+                  >
+                    @for (device of callService.videoInputDevices(); track device.deviceId) {
+                      <option [value]="device.deviceId">{{ device.label }}</option>
+                    }
+                  </select>
+                </div>
+              }
+
+              <!-- Speaker Selection -->
+              @if (callService.audioOutputDevices().length > 0) {
+                <div class="device-section">
+                  <label>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                    Speaker
+                  </label>
+                  <select 
+                    [value]="callService.selectedAudioOutput()"
+                    (change)="onAudioOutputChange($event)"
+                  >
+                    @for (device of callService.audioOutputDevices(); track device.deviceId) {
+                      <option [value]="device.deviceId">{{ device.label }}</option>
+                    }
+                  </select>
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -361,6 +522,197 @@ import { CallService } from '../../services/call.service';
 
     .call-duration {
       font-weight: 500;
+    }
+
+    .encryption-indicator {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: none;
+      background: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .encryption-indicator:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .encryption-indicator.encrypted {
+      background: rgba(6, 207, 156, 0.2);
+      color: #06cf9c;
+    }
+
+    .encryption-indicator.encrypted:hover {
+      background: rgba(6, 207, 156, 0.3);
+    }
+
+    /* Encryption Modal */
+    .encryption-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      animation: fadeIn 0.2s ease;
+    }
+
+    .encryption-modal {
+      background: #1a1a1a;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      overflow: hidden;
+      animation: slideUp 0.3s ease;
+    }
+
+    .encryption-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      background: #2a2a2a;
+      border-bottom: 1px solid #333;
+    }
+
+    .encryption-modal-header h3 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      font-size: 16px;
+      color: white;
+    }
+
+    .encryption-modal-header h3 svg {
+      color: #06cf9c;
+    }
+
+    .encryption-modal-header .close-btn {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 24px;
+      cursor: pointer;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .encryption-modal-header .close-btn:hover {
+      color: white;
+    }
+
+    .encryption-modal-body {
+      padding: 20px;
+    }
+
+    .encryption-status {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .encryption-status.success {
+      background: rgba(6, 207, 156, 0.15);
+      color: #06cf9c;
+    }
+
+    .encryption-status.pending {
+      background: rgba(255, 193, 7, 0.15);
+      color: #ffc107;
+    }
+
+    .encryption-status .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 193, 7, 0.3);
+      border-top-color: #ffc107;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .encryption-details {
+      background: #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+    }
+
+    .detail-row:not(:last-child) {
+      border-bottom: 1px solid #333;
+    }
+
+    .detail-row .label {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+    }
+
+    .detail-row .value {
+      color: white;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .detail-row.fingerprint {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .detail-row.fingerprint .value {
+      font-family: monospace;
+      font-size: 11px;
+      word-break: break-all;
+      background: #1a1a1a;
+      padding: 8px;
+      border-radius: 4px;
+      width: 100%;
+    }
+
+    .encryption-info {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 0;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
 
     .call-controls {
@@ -679,6 +1031,130 @@ import { CallService } from '../../services/call.service';
         transform: scale(0.85);
       }
     }
+
+    /* Device Picker Styles */
+    .settings-btn {
+      background: rgba(255,255,255,0.15);
+    }
+
+    .device-picker-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1002;
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .device-picker-modal {
+      background: #202c33;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 400px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from { 
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to { 
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .device-picker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid #374248;
+    }
+
+    .device-picker-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: #e9edef;
+    }
+
+    .close-picker {
+      background: none;
+      border: none;
+      color: #8696a0;
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .close-picker:hover {
+      background: rgba(134, 150, 160, 0.1);
+      color: #e9edef;
+    }
+
+    .device-picker-content {
+      padding: 16px 20px;
+    }
+
+    .device-section {
+      margin-bottom: 20px;
+    }
+
+    .device-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .device-section label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: #8696a0;
+      margin-bottom: 8px;
+    }
+
+    .device-section select {
+      width: 100%;
+      padding: 12px 16px;
+      background: #111b21;
+      border: 1px solid #374248;
+      border-radius: 8px;
+      color: #e9edef;
+      font-size: 14px;
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%238696a0'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    .device-section select:focus {
+      outline: none;
+      border-color: #00a884;
+    }
+
+    .device-section select option {
+      background: #111b21;
+      color: #e9edef;
+      padding: 8px;
+    }
   `]
 })
 export class VideoCallComponent implements AfterViewInit, OnDestroy {
@@ -757,6 +1233,24 @@ export class VideoCallComponent implements AfterViewInit, OnDestroy {
     const incoming = this.callService.incomingCall();
     if (incoming) {
       this.callService.rejectCall(incoming.callId);
+    }
+  }
+
+  // Device switching handlers
+  onAudioInputChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.callService.switchAudioInput(select.value);
+  }
+
+  onVideoInputChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    this.callService.switchVideoInput(select.value);
+  }
+
+  onAudioOutputChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    if (this.remoteVideoRef?.nativeElement) {
+      this.callService.setAudioOutput(select.value, this.remoteVideoRef.nativeElement);
     }
   }
 

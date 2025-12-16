@@ -3,7 +3,7 @@ export interface Message {
   sender: any;
   receiver?: any;
   content: string;
-  type: 'text' | 'image' | 'video' | 'document' | 'file' | 'voice';
+  type: 'text' | 'image' | 'video' | 'document' | 'file' | 'voice' | 'sticker';
   fileUrl?: string;
   fileName?: string;
   fileSize?: number | string;
@@ -39,6 +39,10 @@ export interface Message {
   // Image feature
   thumbnail?: string;
   mimeType?: string;
+  
+  // Voice message feature
+  voiceDuration?: number;
+  voiceWaveform?: number[];
   
   // Group read receipts
   readBy?: Array<{
