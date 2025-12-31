@@ -291,7 +291,7 @@ import { Message } from '../../models/message.model';
                       <div class="message-menu-container">
                         <button 
                           class="menu-trigger"
-                          (click)="toggleMessageMenu(message._id!)"
+                          (click)="toggleMessageMenu(message._id!); onDropdownMenuOpen(message._id!, $event)"
                         >
                           <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
@@ -299,8 +299,8 @@ import { Message } from '../../models/message.model';
                         </button>
                         
                         @if (activeMessageMenu() === message._id) {
-                          <div class="message-dropdown">
-                            <button class="dropdown-item" (click)="startReply(message); closeMessageMenu()">
+                          <div class="message-dropdown" #dropdownMenu [class.open-up]="dropdownOpenUpMap[message._id]">
+                            <button class="dropdown-item" (click)="startReply(message); closeMessageMenu(); onDropdownMenuClose(message._id)">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="9 17 4 12 9 7"/>
                                 <path d="M20 18v-2a4 4 0 0 0-4-4H4"/>
@@ -308,7 +308,7 @@ import { Message } from '../../models/message.model';
                               Reply
                             </button>
                             
-                            <button class="dropdown-item" (click)="toggleEmojiPicker(message._id!); closeMessageMenu()">
+                            <button class="dropdown-item" (click)="toggleEmojiPicker(message._id!); closeMessageMenu(); onDropdownMenuClose(message._id)">
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <circle cx="12" cy="12" r="10"/>
                                 <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
@@ -319,7 +319,7 @@ import { Message } from '../../models/message.model';
                             </button>
                             
                             @if (canEditMessage(message)) {
-                              <button class="dropdown-item" (click)="startEdit(message); closeMessageMenu()">
+                              <button class="dropdown-item" (click)="startEdit(message); closeMessageMenu(); onDropdownMenuClose(message._id)">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -329,7 +329,7 @@ import { Message } from '../../models/message.model';
                             }
                             
                             @if (canDeleteMessage(message)) {
-                              <button class="dropdown-item delete" (click)="confirmDelete(message); closeMessageMenu()">
+                              <button class="dropdown-item delete" (click)="confirmDelete(message); closeMessageMenu(); onDropdownMenuClose(message._id)">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                   <polyline points="3 6 5 6 21 6"/>
                                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -866,6 +866,24 @@ import { Message } from '../../models/message.model';
   styleUrl: './chat.component.css'
 })
 export class ChatComponent implements OnInit, OnDestroy, AfterViewChecked {
+  // ============= DROPDOWN DIRECTION LOGIC =============
+  dropdownOpenUpMap: Record<string, boolean> = {};
+
+  // Called when the dropdown menu is opened
+  onDropdownMenuOpen(messageId: string, event: Event): void {
+    setTimeout(() => {
+      const dropdown = (event.target as HTMLElement).closest('.message-menu-container')?.querySelector('.message-dropdown') as HTMLElement;
+      if (!dropdown) return;
+      const rect = dropdown.getBoundingClientRect();
+      // If the bottom of the dropdown is below the viewport, open up
+      this.dropdownOpenUpMap[messageId] = rect.bottom > window.innerHeight;
+    }, 0);
+  }
+
+  // Call this when closing the menu
+  onDropdownMenuClose(messageId: string): void {
+    this.dropdownOpenUpMap[messageId] = false;
+  }
   authService = inject(AuthService);
   chatService = inject(ChatService);
   socketService = inject(SocketService);
